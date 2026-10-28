@@ -1,0 +1,9 @@
+@@ -158,7 +158,7 @@
+ void adsr_setGate(struct adsr_s * a, int8_t gate)
+ {
+ 	a->phase=0;
+-	a->stageLevel=((uint32_t)a->output<<16)/a->levelCV;
++	a->stageLevel=a->levelCV?((uint32_t)a->output<<16)/a->levelCV:0; /* P8 patch 0001: guard div-by-zero - levelCV is unset before the first note; AVR and Cortex-M UDIV-by-zero do not trap, x86 does */
+ 
+ 	if(gate)
+ 	{

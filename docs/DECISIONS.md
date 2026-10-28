@@ -10,3 +10,12 @@ Fallback: DPF (ISC) if AGPL terms ever bite — its AU support is newer/weaker, 
 
 ## ADR-003 — Upstream references are snapshots, not code (2026-10-28, Muse)
 `references/` holds read-only snapshots of PRO800-Firmware-Packer @ `c845054` and p600fw (upstream pushed 2026-04-13) for offline reference. The packer binary is used as a tool only; its output encryption is never re-implemented.
+
+## ADR-004 — tuner.c is imported with the logic files (2026-10-28, Muse)
+The roadmap classifies tuner.c as hardware-coupled, and its measurement path is — but `tuner_computeCVFromNote` is pure logic that synth.c needs for every pitch CV. Importing it whole (measurement path running on the bridge's mocked io, never exercised on host) beats reimplementing its tuning math. The PRO-800 target still rewrites the measurement path in H1.
+
+## ADR-005 — Engine rate: 500 Hz inside a 2 kHz frame rate (2026-10-28, Muse)
+P600fw's timer interrupt runs at 500 Hz (TICKER_1S=500). `p8_core_tick` runs at the HAL's 2 kHz and advances the engine timer every 4th tick; `synth_update` (panel housekeeping) runs every tick. Envelopes/LFO therefore keep hardware timing while targets get 2 kHz frames.
+
+## ADR-006 — One carried patch: ADSR divide-by-zero guard (2026-10-28, Muse)
+`adsr_setGate` divides by `levelCV`, which is 0 until the first note-on sets it (synth_assignerEvent sets gate *before* the velocity/level block). AVR and Cortex-M UDIV-by-zero don't trap, so upstream never sees it; x86 raises SIGFPE — found by running a MIDI note-on probe on this VM (UBSan: adsr.c:161 division by zero). Fix is a one-line guard in `patches/0001-adsr-setgate-div0-guard.patch`, behaviour-identical in the only reachable case (output is 0 whenever levelCV is 0 at gate time). Everything else in p600fw_derived stays byte-identical to upstream.
