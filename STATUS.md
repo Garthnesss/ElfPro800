@@ -1,27 +1,29 @@
 # ElfChords P8 — Status
 
 **Last updated:** 2026-10-28
-**Phase:** Pre-V0 — pre-code proposal delivered, awaiting Garth's go on licence/framework + first commits.
+**Phase:** V0 complete on this VM (with two flagged deviations below). Next: V1 plugin, or the 8-voice expansion first — Garth's call.
 
 ## Where things stand
-- Source roadmap + coding prompt — **RECEIVED** (2026-10-28, Garth): preserved in `docs/input/`; this project's canonical docs are derived from them.
-- Upstream claims — **VERIFIED on this VM (2026-10-28)**: packer repo cloned at HEAD `c845054` (2026-10-23); tree matches the roadmap exactly (README, LICENSE AGPL-3.0, DISCLAIMER, main-PCB schematic PDF, 3 packer binaries, nothing else). README confirms STM32F446, app at `0x08010000`, max FW 128 kB, RAM 128 kB, buttons 0+7 update mode, SysEx `F0 00 20 32 00 01 24 00 03 30 F7`, max rate 9.64 kB/s.
-- Packer behaviour — **REPRODUCED on this VM (2026-10-28)**: Linux `PRO800_update_gen` on a 1,136-byte test image emitted exactly 7 SysEx messages / 1,473 bytes (header 66 B with `…24 00 0A` + `P0E9I`; data messages 255 B with `…24 00 0B 00`), byte-identical on re-run (deterministic).
-- P600fw — **VERIFIED**: `common/` logic/hardware file split matches the roadmap; `.c` files total 7,583 lines; README states GPL v3. Snapshot in `references/p600fw/`.
-- REA-Results — **CHECKED (2026-10-28)**: local mirror (Oct 25 snapshot, commit 315e420) grep for pro-800/pro800/p600/stm32f446/behringer = no hits. API routes still 404 (known block, Erik-side collaborator/App-selection fix pending) — noted in one line per standing rule, project continues on local sources.
-- Toolchain on this VM — **VERIFIED**: cmake 3.28.3, gcc 13.3.0, `arm-none-eabi-gcc` 13.2.rel1 (the roadmap's linker-script proof used Arm GNU 14.2.rel1 elsewhere — flag if V0 CI shows differences).
-- Code — **NOT STARTED**. No repo initialised yet; V0 begins on Garth's go.
-- Hardware — **NOT OWNED**. No PRO-800 unit; H-phases gated on purchase + explicit go.
+- V0 commits 1–5 — **DONE + VERIFIED on this VM (2026-10-28)**: local git repo at `~/workspace/elfchords-p8`, commits `e190863` (scaffold), `0e1e46c` (CMake/HAL/CI), `c146083` (P600fw import + bridge), `dcba0e5` (unit tests), `07591f9` (render + golden). Not pushed anywhere — no remote repo exists yet.
+- Tests — **ctest 9/9 pass** on Linux: smoke, adsr (incl. patch-0001 regression), lfo, assigner, clock/arp/seq, engine (note on/off, sustain, running status, determinism), golden CvFrame snapshot, render smoke + WAV verify.
+- Render — **WORKS**: `tools/render tests/data/chord.mid out` → CSV of every CvFrame + 48 kHz WAV of a Cmaj chord (peak 28409, RMS 8317, sustained while held, released at note-off). Placeholder DSP only (pitch from MIDI; engine amp/filter CVs per voice) — the analog voice model is V1.
+- ARM cross-compile — **GREEN**: core + derived engine build for Cortex-M4 hard-float; combined text 52,227 bytes (fits the 128 kB PRO-800 app budget with room for the H-phase USB/HAL).
+- Upstream import — byte-identical to gligli/p600fw except **one** carried patch (ADR-006: ADSR divide-by-zero guard, `patches/0001`). Findings along the way, all reproduced on this VM: the div-by-zero itself (UBSan, adsr.c:161); notes gated during the engine's post-init preset load are dropped (~100 frames boot guard in render); blank storage boots an all-zero preset (2 ms envelope blips) — init patch = `preset_loadDefault` + `refreshFullState()`.
+
+## Deviations from the V0 gate in the source prompt (need Garth's call)
+1. **Voices: 6, not 8.** P600fw is a 6-voice engine and its CV enum/preset structures are 6-fixed — expanding to 8 is real surgery on assigner/synth/storage, not a define flip. The P8 CvFrame is already 8-wide (voices 7–8 silent). Recommendation: make 8-voice expansion the first V1 milestone, before the plugin DSP voices multiply the problem.
+2. **CI on 3 OSes: unverified.** The GitHub Actions workflow is committed, but there is no remote repo yet, so only the Linux host build is proven. macOS/Windows green awaits the repo (open decision 3).
 
 ## Decisions made
-- Licence: **GPL-3.0-or-later, whole repo** (proposed 2026-10-28, Muse — pending Garth's confirmation; default per his prompt because of P600fw reuse).
-- Plugin framework: **JUCE 8 under AGPL-3.0** for V1, with CLAP via clap-juce-extensions (proposed 2026-10-28, Muse — pending confirmation). V0 itself is framework-free (CMake + C99 + CTest) so the core never depends on JUCE. DPF is the documented fallback (see `docs/DECISIONS.md`).
+- Licence: **GPL-3.0-or-later, whole repo** (ADR-001 — confirmed by Garth 2026-10-28).
+- Plugin framework: **JUCE 8 under AGPL-3.0** for V1, CLAP via clap-juce-extensions; DPF fallback (ADR-002 — confirmed by Garth 2026-10-28).
+- ADR-003 upstream snapshots; ADR-004 tuner.c imported whole; ADR-005 engine runs 500 Hz inside the 2 kHz frame rate; ADR-006 one carried patch (ADSR div0 guard).
 
 ## Open decisions (need the user's call)
-1. **Licence/framework confirmation** — GPL-3.0-or-later + JUCE/AGPL as proposed, or DPF/permissive plugin shell instead.
-2. **Final product name** — working title `elfchords-p8` only; name is Garth's pick (prompt rule: ask before finalising).
-3. **Repo home** — public vs private GitHub repo, and its name (same open question as the LXR-02 plugin had; Garth creates it himself when ready).
+1. **Next step order** — 8-voice expansion first (recommended), or straight into the V1 JUCE plugin with 6 voices and expand later.
+2. **Final product name** — working title `elfchords-p8` only.
+3. **Repo home** — public vs private GitHub repo + name (Garth creates it; then CI can verify macOS/Windows and the work can be pushed).
 
 ## Next actions
-- [ ] Garth: confirm (or change) the licence/framework proposal and the first-5-commits plan.
-- [ ] Muse: on go — execute commits 1–5 for V0, showing build/test output after each.
+- [ ] Garth: pick the next-step order; create the GitHub repo when ready and hand over the URL.
+- [ ] Muse: on go — start the chosen milestone; when a remote exists, push commits 1–5 and confirm CI on all 3 OSes.
