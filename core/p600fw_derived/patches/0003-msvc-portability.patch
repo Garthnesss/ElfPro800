@@ -130,6 +130,15 @@
  {
  	// stop previous assigned notes
  
+@@ -83,7 +83,7 @@
+ }
+ 
+ 
+-int16_t inline lfo_getOutput(struct lfo_s * lfo)
++int16_t lfo_getOutput /* P8 patch 0003: was mid-signature inline */(struct lfo_s * lfo)
+ {
+ 	return lfo->output;
+ }
 @@ -119,7 +119,7 @@
  		sineShape[i]=(cosf((i/255.0f+1.0f)*M_PI)+1.0f)/2.0f*65535.0f;
  }

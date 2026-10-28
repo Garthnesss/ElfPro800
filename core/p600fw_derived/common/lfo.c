@@ -83,7 +83,7 @@ void LOWERCODESIZE lfo_resetPhase(struct lfo_s * lfo)
 }
 
 
-int16_t inline lfo_getOutput(struct lfo_s * lfo)
+int16_t lfo_getOutput /* P8 patch 0003: was mid-signature inline */(struct lfo_s * lfo)
 {
 	return lfo->output;
 }
