@@ -11,7 +11,13 @@ const uint8_t z80EnvCV[16]=
 	0,55,86,101,111,124,135,139,143,148,154,164,176,185,191,210
 };
 
-__attribute__((packed)) struct z80Patch_t
+#if defined(_MSC_VER) /* P8 patch 0003: pragma pack instead of __attribute__((packed)) */
+#pragma pack(push, 1)
+#define P8_Z80PACKED
+#else
+#define P8_Z80PACKED __attribute__((packed))
+#endif
+P8_Z80PACKED struct z80Patch_t
 {
 	// pots
 	uint16_t pwA : 7;
@@ -54,6 +60,9 @@ __attribute__((packed)) struct z80Patch_t
 	uint16_t pmodFil : 1;
 	uint16_t unison : 1;
 };
+#if defined(_MSC_VER)
+#pragma pack(pop)
+#endif
 
 LOWERCODESIZE void import_sysex(uint8_t * buf, int16_t size)
 {

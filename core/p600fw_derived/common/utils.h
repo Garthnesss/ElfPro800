@@ -7,8 +7,13 @@
 #include <float.h>
 #include <math.h>
 
+#if defined(_MSC_VER) /* P8 patch 0003: MSVC has no __attribute__ */
+#define FORCEINLINE __forceinline
+#define NOINLINE __declspec(noinline)
+#else
 #define FORCEINLINE inline __attribute__((always_inline))
-#define NOINLINE __attribute__ ((noinline)) 
+#define NOINLINE __attribute__ ((noinline))
+#endif
 #define LOWERCODESIZE
 
 #undef MAX
