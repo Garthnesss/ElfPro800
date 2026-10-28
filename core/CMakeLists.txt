@@ -31,7 +31,7 @@ if(MSVC)
   # cl rejects GCC-style -Wno-* flags outright (CI, 2026-10-28); the
   # imported code is warning-noisy by upstream standards, so silence it.
   # (No -fgnu89-inline needed: MSVC's C99 inline matches the clang path.)
-  target_compile_options(p8p600 PRIVATE /W0)
+  target_compile_options(p8p600 PRIVATE /W0 -D_USE_MATH_DEFINES) # _USE_MATH_DEFINES: M_PI in lfo.c
 else()
   target_compile_options(p8p600 PRIVATE -fgnu89-inline -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare)
 endif()
