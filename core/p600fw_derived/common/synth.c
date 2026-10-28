@@ -80,8 +80,8 @@ struct synth_s
     struct lfo_s lfo,vibrato;
 
     // store slowly and on event changing partial results so that specific updates can be made faster
-    int32_t tunedBenderCVs[pcFil6-pcOsc1A+1];
-    int32_t tunedOctaveCVs[pcOsc6B-pcOsc1A+1];
+    int32_t tunedBenderCVs[pcFil8-pcOsc1A+1];
+    int32_t tunedOctaveCVs[pcOsc8B-pcOsc1A+1];
     uint16_t oscABaseCV[SYNTH_VOICE_COUNT];
     uint16_t oscBBaseCV[SYNTH_VOICE_COUNT];
     uint16_t filterBaseCV[SYNTH_VOICE_COUNT];
@@ -100,7 +100,7 @@ struct synth_s
     int16_t benderAmountInternal;
     int16_t benderAmountExternal;
     uint16_t masterVolume;
-    int16_t benderCVs[pcFil6-pcOsc1A+1];
+    int16_t benderCVs[pcFil8-pcOsc1A+1];
     int16_t benderVolumeCV;
 
     uint16_t dlyAmt;
@@ -192,10 +192,10 @@ static void addWheelToTunedCVs(void) // this function is specific for the case i
 static void computeTunedOffsetCVs(void) // this function must always be called after tuning or after the semitones setting of the bender changes (inkl. preset change)
 {
     p600CV_t cv;
-    for(cv=pcOsc1A; cv<=pcFil6; ++cv)
+    for(cv=pcOsc1A; cv<=pcFil8; ++cv)
     {
         synth.tunedBenderCVs[cv]=tuner_computeCVFromNote(currentPreset.steppedParameters[spBenderSemitones]*4,0,cv)-tuner_computeCVFromNote(0,0,cv);
-        if (cv<=pcOsc6B) synth.tunedOctaveCVs[cv]=(uint16_t)((tuner_computeCVFromNote(48,0,cv)-tuner_computeCVFromNote(0,0,cv))*2.5f);
+        if (cv<=pcOsc8B) synth.tunedOctaveCVs[cv]=(uint16_t)((tuner_computeCVFromNote(48,0,cv)-tuner_computeCVFromNote(0,0,cv))*2.5f);
     }
 }
 
@@ -345,7 +345,7 @@ static void computeTunedCVs(int8_t force, int8_t forceVoice)
 
         v_aux=v;
         synth.oscABaseCV[v]=satAddU16S16(tuner_computeCVFromNote(ANote,baseAPitch,pcOsc1A+v),(1+(v_aux>>1))*(v_aux&1?-1:1)*detune);
-        v_aux=(v+3)%6;
+        v_aux=(v+3)%SYNTH_VOICE_COUNT;
         synth.oscBBaseCV[v]=satAddU16S16(tuner_computeCVFromNote(BNote,baseBPitch,pcOsc1B+v),(1+(v_aux>>1))*(v_aux&1?-1:1)*detune);
 
         // filter
@@ -364,7 +364,7 @@ static void computeTunedCVs(int8_t force, int8_t forceVoice)
                 trackingNote=0;
         }
 
-        v_aux=(v+5)%6;
+        v_aux=(v+5)%SYNTH_VOICE_COUNT;
         synth.filterBaseCV[v]=satAddU16S16(tuner_computeCVFromNote(trackingNote,baseCutoff,pcFil1+v),(1+(v_aux>>1))*detune);
 
         // unison detune
@@ -490,7 +490,7 @@ static void computeBenderCVs(void) // this function always needs to be called wh
 
     // reset old bends
 
-    for(cv=pcOsc1A; cv<=pcFil6; ++cv)
+    for(cv=pcOsc1A; cv<=pcFil8; ++cv)
         synth.benderCVs[cv]=0;
     synth.benderVolumeCV=0;
 
@@ -504,14 +504,14 @@ static void computeBenderCVs(void) // this function always needs to be called wh
         case modB:
         case modAB:
             cvFrom=currentPreset.steppedParameters[spBenderTarget]==modB?pcOsc1B:pcOsc1A;
-            for(cv=cvFrom; cv<=pcOsc6B; ++cv)
+            for(cv=cvFrom; cv<=pcOsc8B; ++cv)
             {
                 bend=synth.tunedBenderCVs[cv]*satAddS16S16(synth.benderAmountInternal, synth.benderAmountExternal);
                 synth.benderCVs[cv]=bend>>16; // /65536
             }
             break;
         case modVCF:
-            for(cv=pcFil1; cv<=pcFil6; ++cv)
+            for(cv=pcFil1; cv<=pcFil8; ++cv)
             {
                 synth.benderCVs[cv]=bend>>16; // ... after >>16
             }
@@ -707,16 +707,16 @@ static void refreshEnvSettings(void)
             spread=0;
         }
 
-        v_aux=(i+1)%6;
+        v_aux=(i+1)%SYNTH_VOICE_COUNT;
         aa=scaleProportionalU16S16(currentPreset.continuousParameters[cpAmpAtt],(1+(v_aux>>1))*(v_aux&1?-1:1)*spread/1.5f);
-        v_aux=(i+2)%6;
+        v_aux=(i+2)%SYNTH_VOICE_COUNT;
         ad=scaleProportionalU16S16(currentPreset.continuousParameters[cpAmpDec],(1+(v_aux>>1))*(v_aux&1?-1:1)*spread);
-        v_aux=(i+3)%6;
+        v_aux=(i+3)%SYNTH_VOICE_COUNT;
         ar=scaleProportionalU16S16(currentPreset.continuousParameters[cpAmpRel],(1+(v_aux>>1))*(v_aux&1?-1:1)*spread/2.0f);
 
-        v_aux=(i+4)%6;
+        v_aux=(i+4)%SYNTH_VOICE_COUNT;
         fa=scaleProportionalU16S16(currentPreset.continuousParameters[cpFilAtt],(1+(v_aux>>1))*(v_aux&1?-1:1)*spread/1.5f);
-        v_aux=(i+5)%6;
+        v_aux=(i+5)%SYNTH_VOICE_COUNT;
         fd=scaleProportionalU16S16(currentPreset.continuousParameters[cpFilDec],(1+(v_aux>>1))*(v_aux&1?-1:1)*spread);
         v_aux=i;
         fr=scaleProportionalU16S16(currentPreset.continuousParameters[cpFilRel],(1+(v_aux>>1))*(v_aux&1?-1:1)*spread/2.0f);
@@ -1496,12 +1496,8 @@ void synth_timerInterrupt(void)
     // per voice stuff
 
     // SYNTH_VOICE_COUNT calls
-    refreshVoice(0,oscEnvAmt,filEnvAmt,pitchALfoVal,pitchBLfoVal,filterLfoVal,ampLfoVal);
-    refreshVoice(1,oscEnvAmt,filEnvAmt,pitchALfoVal,pitchBLfoVal,filterLfoVal,ampLfoVal);
-    refreshVoice(2,oscEnvAmt,filEnvAmt,pitchALfoVal,pitchBLfoVal,filterLfoVal,ampLfoVal);
-    refreshVoice(3,oscEnvAmt,filEnvAmt,pitchALfoVal,pitchBLfoVal,filterLfoVal,ampLfoVal);
-    refreshVoice(4,oscEnvAmt,filEnvAmt,pitchALfoVal,pitchBLfoVal,filterLfoVal,ampLfoVal);
-    refreshVoice(5,oscEnvAmt,filEnvAmt,pitchALfoVal,pitchBLfoVal,filterLfoVal,ampLfoVal);
+    for(v=0;v<SYNTH_VOICE_COUNT;++v) /* P8 patch 0002: was 6 unrolled calls */
+        refreshVoice(v,oscEnvAmt,filEnvAmt,pitchALfoVal,pitchBLfoVal,filterLfoVal,ampLfoVal);
 
     // bit inputs (footswitch / tape in)
 

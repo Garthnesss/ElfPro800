@@ -14,3 +14,6 @@ add_test(NAME render_smoke
 add_test(NAME render_verify
   COMMAND $<TARGET_FILE:render> --verify ${CMAKE_CURRENT_BINARY_DIR}/chord_out.wav)
 set_tests_properties(render_verify PROPERTIES DEPENDS render_smoke)
+add_executable(test_engine8 test_engine8.c)
+target_link_libraries(test_engine8 PRIVATE p8core p8p600 p8core)
+add_test(NAME engine8 COMMAND test_engine8)

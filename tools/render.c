@@ -192,7 +192,7 @@ int main(int argc, char **argv)
                     mix += vr[v].lp * amp;
                 }
                 {
-                    int32_t smp = (int32_t)(mix * 0.25 * 32767.0);
+                    int32_t smp = (int32_t)(mix * 0.11 * 32767.0) /* 0.11: headroom for 8 summed voices (was 0.25, clipped) */;
                     int16_t o;
                     if (smp > 32767) smp = 32767;
                     if (smp < -32768) smp = -32768;

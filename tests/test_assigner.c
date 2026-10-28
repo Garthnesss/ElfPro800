@@ -31,11 +31,16 @@ int main(void)
     assert(count_assigned() == 3);
     assert(voice_of(60) >= 0 && voice_of(64) >= 0 && voice_of(67) >= 0);
     assert(assigner_getLatestNotePressed(&latest) && latest == 67);
-    /* overflow: more notes than voices must not corrupt state */
+    /* fill all 8 voices (patch 0002) */
     assigner_assignNote(69, 1, 30000, 1);
     assigner_assignNote(71, 1, 30000, 1);
     assigner_assignNote(72, 1, 30000, 1);
     assigner_assignNote(74, 1, 30000, 1);
+    assigner_assignNote(76, 1, 30000, 1);
+    assert(count_assigned() == 8);
+    assert(voice_of(76) >= 0);
+    /* overflow: a 9th note must not corrupt state */
+    assigner_assignNote(79, 1, 30000, 1);
     assert(count_assigned() <= SYNTH_VOICE_COUNT);
     assigner_allKeysOff();
     assert(!assigner_getAnyPressed());

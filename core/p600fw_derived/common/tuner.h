@@ -3,7 +3,7 @@
 
 #include "synth.h"
 
-#define TUNER_CV_COUNT (pcFil6-pcOsc1A+1)
+#define TUNER_CV_COUNT (pcFil8-pcOsc1A+1) /* P8 patch 0002 */
 #define TUNER_OCTAVE_COUNT 8 // changing this will break settings storage!
 #define TUNER_NOTE_COUNT 12 // currently we only store the 12-scale degrees
   

@@ -205,14 +205,14 @@ LOWERCODESIZE int8_t settings_load(void)
 
 		// defaults
 
-		settings.voiceMask=0x3f;
+		settings.voiceMask=(1<<SYNTH_VOICE_COUNT)-1; /* P8 patch 0002 */
 		settings.vcfLimit=0;
 		settings.seqArpClock=HALF_RANGE;
 		settings.presetNumber=1; // if no other info, set selected preset to 1
 		settings.benderMiddle=HALF_RANGE;
 		settings.presetMode=0; // if no info, default start up is in live mode
 		settings.midiReceiveChannel=-1; // default is 'OMNI'
-		settings.voiceMask=0x3f; // default is: all on
+		settings.voiceMask=(1<<SYNTH_VOICE_COUNT)-1; /* P8 patch 0002 */ // default is: all on
 		settings.midiSendChannel=0; // default is: 1
 		settings.syncMode=smInternal; // default is internal clock
 		settings.vcfLimit=0; // default is: no limit on the VCF
@@ -720,7 +720,7 @@ LOWERCODESIZE void settings_loadDefault(void)
 		
 		settings.benderMiddle=HALF_RANGE;
 		settings.midiReceiveChannel=-1; // OMNI
-		settings.voiceMask=0x3f;
+		settings.voiceMask=(1<<SYNTH_VOICE_COUNT)-1; /* P8 patch 0002 */
 		settings.seqArpClock=HALF_RANGE;
         settings.panelLayout=0; // GliGli layout
 		

@@ -21,7 +21,7 @@
 #endif
 
 
-#define SYNTH_VOICE_COUNT 6
+#define SYNTH_VOICE_COUNT 8 /* P8 patch 0002: 8 voices (PRO-800 class) */
 
 #define SYSEX_ID_0 0x00
 #define SYSEX_ID_1 0x61
@@ -73,11 +73,11 @@ typedef enum
 
 typedef enum
 {
-	pcOsc1A=0,pcOsc2A,pcOsc3A,pcOsc4A,pcOsc5A,pcOsc6A,           
-	pcOsc1B=6,pcOsc2B,pcOsc3B,pcOsc4B,pcOsc5B,pcOsc6B,           
-	pcFil1=12,pcFil2,pcFil3,pcFil4,pcFil5,pcFil6,                
-	pcAmp1=18,pcAmp2,pcAmp3,pcAmp4,pcAmp5,pcAmp6,                
-	pcPModOscB=24,pcVolA,pcVolB,pcMVol,pcAPW,pcExtFil,pcResonance,pcBPW
+	pcOsc1A=0,pcOsc2A,pcOsc3A,pcOsc4A,pcOsc5A,pcOsc6A,pcOsc7A,pcOsc8A, /* P8 patch 0002 */           
+	pcOsc1B=8,pcOsc2B,pcOsc3B,pcOsc4B,pcOsc5B,pcOsc6B,pcOsc7B,pcOsc8B, /* P8 patch 0002 */           
+	pcFil1=16,pcFil2,pcFil3,pcFil4,pcFil5,pcFil6,pcFil7,pcFil8, /* P8 patch 0002 */                
+	pcAmp1=24,pcAmp2,pcAmp3,pcAmp4,pcAmp5,pcAmp6,pcAmp7,pcAmp8, /* P8 patch 0002 */                
+	pcPModOscB=32,pcVolA /* P8 patch 0002: globals shift past 8 amp CVs */,pcVolB,pcMVol,pcAPW,pcExtFil,pcResonance,pcBPW
 } p600CV_t;
 
 typedef enum

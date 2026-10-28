@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include "synth.h" /* p600 enums: p600CV_t, p600Gate_t, p600Pot_t, p600Button_t, p600LED_t */
 
-#define P8_BRIDGE_CV_COUNT 32
+#define P8_BRIDGE_CV_COUNT 40 /* 8 voices x 4 CVs + 8 globals (patch 0002 layout) */
 #define P8_BRIDGE_MIDI_OUT_MAX 8192
 
 void p8_bridge_reset(void);

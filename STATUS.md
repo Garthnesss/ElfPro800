@@ -27,3 +27,18 @@
 ## Next actions
 - [ ] Garth: pick the next-step order; create the GitHub repo when ready and hand over the URL.
 - [ ] Muse: on go — start the chosen milestone; when a remote exists, push commits 1–5 and confirm CI on all 3 OSes.
+## Update 2026-10-28 (later) — 8-voice expansion DONE + repo created
+
+Garth chose "8-voice expansion first, then V1" and created the repo:
+**https://github.com/Garthnesss/ElfPro800** (public). Expansion landed as
+carried patch 0002 (ADR-007): SYNTH_VOICE_COUNT 8, CV enum extended
+(globals shift to 32, bridge CV count 40), %6 spread rotations and
+refreshVoice unroll generalized, voiceMask defaults to all 8 voices.
+Evidence: ctest **10/10** (new engine8 test: 8-note chord sustains on all
+8 amp CVs at distinct pitches, all release; assigner fills exactly 8);
+the V0 golden snapshot passes **unchanged**; ARM text 52,149 B (loop
+replaced unrolled calls — slightly smaller than the 6-voice build).
+8-note render proof: `elfchords-p8-8voice-chord.wav` (peak 18144;
+demo mixer gain lowered 0.25→0.11 for 8-voice headroom). Next: V1 JUCE
+plugin (6→8 voices already native now).
+
