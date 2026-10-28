@@ -23,3 +23,16 @@ char *itoa(int value, char *str, int base)
 typedef uint8_t interrupt_setting_t;
 interrupt_setting_t store_and_clear_interrupt(void) { return 0; }
 void restore_interrupt_setting(interrupt_setting_t setting) { (void)setting; }
+
+#if defined(_MSC_VER)
+/* POSIX random()/srandom() for the MSVC CRT (declared in the print.h
+ * shim). Simple LCG; used for LFO random shape and arp randomness, where
+ * cross-platform determinism is not required. */
+static unsigned long p8_rand_state = 1;
+void srandom(unsigned int seed) { p8_rand_state = seed ? seed : 1; }
+long random(void)
+{
+    p8_rand_state = p8_rand_state * 1103515245UL + 12345UL;
+    return (long)((p8_rand_state >> 16) & 0x7FFF);
+}
+#endif

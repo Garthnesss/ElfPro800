@@ -8,6 +8,10 @@
  * MSVC) do not, and clang treats the implicit declaration as an error
  * (found by macOS CI, 2026-10-28). synth.c calls it; compat.c defines it. */
 char *itoa(int value, char *str, int base);
+/* POSIX random()/srandom() (lfo.c, arp.c): present in glibc and avr-libc,
+ * absent from the MSVC CRT; compat.c provides them under _MSC_VER. */
+long random(void);
+void srandom(unsigned int seed);
 static inline void print(const char *s) { (void)s; }
 static inline void print_P(const char *s) { (void)s; }
 static inline void pchar(int c) { (void)c; }

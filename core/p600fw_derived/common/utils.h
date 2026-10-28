@@ -8,7 +8,11 @@
 #include <math.h>
 
 #if defined(_MSC_VER) /* P8 patch 0003: MSVC has no __attribute__ */
-#define FORCEINLINE __forceinline
+/* MSVC gives plain `inline` definitions no external symbol, and this
+ * codebase relies on the GNU89 rule that they are exported (headers carry
+ * the plain declarations). So for MSVC, FORCEINLINE is empty: definitions
+ * become ordinary external functions, exactly what callers link against. */
+#define FORCEINLINE
 #define NOINLINE __declspec(noinline)
 #else
 #define FORCEINLINE inline __attribute__((always_inline))

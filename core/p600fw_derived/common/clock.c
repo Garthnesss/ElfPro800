@@ -11,7 +11,7 @@ struct
 	uint16_t counter,speed;
 } clock;
 
-inline void clock_setSpeed(uint16_t speed)
+void clock_setSpeed /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(uint16_t speed)
 {
 
 	if(speed<1024)
@@ -22,23 +22,23 @@ inline void clock_setSpeed(uint16_t speed)
         clock.speed=extClockDividers[(((uint32_t)speed)*16)>>16];
 }
 
-inline uint16_t clock_getSpeed(void)
+uint16_t clock_getSpeed /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
 {
 	return clock.speed;
 }
 
-inline uint16_t clock_getCounter(void)
+uint16_t clock_getCounter /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
 {
 	return clock.counter;
 }
 
-inline void clock_reset(void)
+void clock_reset /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
 {
 	clock.counter = INT16_MAX; // not UINT16_MAX, to avoid overflow
 
 }
 
-inline int8_t clock_update(void)
+int8_t clock_update /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
 {
 	// speed management
 

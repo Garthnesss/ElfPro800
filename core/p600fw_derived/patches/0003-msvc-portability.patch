@@ -1,9 +1,13 @@
-@@ -7,8 +7,13 @@
+@@ -7,8 +7,17 @@
  #include <float.h>
  #include <math.h>
  
 +#if defined(_MSC_VER) /* P8 patch 0003: MSVC has no __attribute__ */
-+#define FORCEINLINE __forceinline
++/* MSVC gives plain `inline` definitions no external symbol, and this
++ * codebase relies on the GNU89 rule that they are exported (headers carry
++ * the plain declarations). So for MSVC, FORCEINLINE is empty: definitions
++ * become ordinary external functions, exactly what callers link against. */
++#define FORCEINLINE
 +#define NOINLINE __declspec(noinline)
 +#else
  #define FORCEINLINE inline __attribute__((always_inline))
@@ -38,3 +42,40 @@
  
  LOWERCODESIZE void import_sysex(uint8_t * buf, int16_t size)
  {
+@@ -11,7 +11,7 @@
+ 	uint16_t counter,speed;
+ } clock;
+ 
+-inline void clock_setSpeed(uint16_t speed)
++void clock_setSpeed /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(uint16_t speed)
+ {
+ 
+ 	if(speed<1024)
+@@ -22,23 +22,23 @@
+         clock.speed=extClockDividers[(((uint32_t)speed)*16)>>16];
+ }
+ 
+-inline uint16_t clock_getSpeed(void)
++uint16_t clock_getSpeed /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
+ {
+ 	return clock.speed;
+ }
+ 
+-inline uint16_t clock_getCounter(void)
++uint16_t clock_getCounter /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
+ {
+ 	return clock.counter;
+ }
+ 
+-inline void clock_reset(void)
++void clock_reset /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
+ {
+ 	clock.counter = INT16_MAX; // not UINT16_MAX, to avoid overflow
+ 
+ }
+ 
+-inline int8_t clock_update(void)
++int8_t clock_update /* P8 patch 0003: was `inline` (MSVC exports no symbol) */(void)
+ {
+ 	// speed management
+ 
