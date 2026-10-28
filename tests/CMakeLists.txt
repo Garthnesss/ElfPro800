@@ -6,3 +6,11 @@ endforeach()
 add_executable(test_smoke test_smoke.c)
 target_link_libraries(test_smoke PRIVATE p8core)
 add_test(NAME smoke COMMAND test_smoke)
+add_executable(test_golden test_golden.c)
+target_link_libraries(test_golden PRIVATE p8core p8p600 p8core)
+add_test(NAME golden COMMAND test_golden)
+add_test(NAME render_smoke
+  COMMAND ${CMAKE_COMMAND} -E env $<TARGET_FILE:render> ${CMAKE_CURRENT_SOURCE_DIR}/data/chord.mid ${CMAKE_CURRENT_BINARY_DIR}/chord_out)
+add_test(NAME render_verify
+  COMMAND $<TARGET_FILE:render> --verify ${CMAKE_CURRENT_BINARY_DIR}/chord_out.wav)
+set_tests_properties(render_verify PROPERTIES DEPENDS render_smoke)

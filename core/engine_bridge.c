@@ -36,7 +36,7 @@ void p8_bridge_reset(void)
     memset(g_led_blink, 0, sizeof(g_led_blink));
     memset(g_mem, 0, sizeof(g_mem));
     memset(g_io, 0, sizeof(g_io));
-    memset(g_storage, 0, sizeof(g_storage));
+    memset(g_storage, 0xff, sizeof(g_storage)); /* erased EEPROM reads 0xFF, like the real 24LC512 */
     memset(g_pot_changed, 0, sizeof(g_pot_changed));
     g_display[0] = ' '; g_display[1] = ' '; g_display[2] = ' '; g_display[3] = ' '; g_display[4] = '\0';
     g_midi_out_len = 0;

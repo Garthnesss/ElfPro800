@@ -30,3 +30,7 @@ uint32_t p8_bridge_leds(void);       /* bit i = p600LED_t i on */
 uint16_t p8_bridge_midi_out_read(uint8_t *buf, uint16_t max);
 
 #endif /* P8_ENGINE_BRIDGE_H */
+
+/* Engine entry points that P600fw declares only inside its own .c files
+ * (ui.c declares this one extern locally; there is no public header). */
+void refreshFullState(void);
