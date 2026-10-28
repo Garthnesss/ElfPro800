@@ -184,7 +184,7 @@ void adsr_reset(struct adsr_s * adsr)
 	updateStageVars(adsr,sWait);
 }
 
-inline void adsr_setShape(struct adsr_s * adsr, int8_t shape)
+void adsr_setShape(struct adsr_s * adsr, int8_t shape)
 {
 	adsr->shape=shape;
 }
@@ -196,12 +196,12 @@ LOWERCODESIZE void adsr_setSpeedShift(struct adsr_s * adsr, uint8_t shift)
 	updateIncrements(adsr);
 }
 
-inline adsrStage_t adsr_getStage(struct adsr_s * adsr)
+adsrStage_t adsr_getStage(struct adsr_s * adsr)
 {
 	return adsr->stage;
 }
 
-inline uint16_t adsr_getOutput(struct adsr_s * adsr)
+uint16_t adsr_getOutput(struct adsr_s * adsr)
 {
 	return adsr->output;
 }
@@ -211,7 +211,7 @@ void adsr_init(struct adsr_s * adsr)
 	memset(adsr,0,sizeof(struct adsr_s));
 }
 
-inline void adsr_update(struct adsr_s * a)
+void adsr_update(struct adsr_s * a)
 {
 	// if bit 24 or higher is set, it's an overflow -> a timed stage is done!
 	

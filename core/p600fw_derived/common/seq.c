@@ -115,7 +115,7 @@ static FORCEINLINE void playStep(int8_t track)
 	} while(s&SEQ_CONT); // all notes with this bit set are part of the same "chord", e.g. which ae the continuation flag set 
 }
 
-inline void seq_setMode(int8_t track, seqMode_t mode)
+void seq_setMode(int8_t track, seqMode_t mode)
 {
 	struct track *tp = &seq.tracks[track];
 	int8_t alreadyPlaying;

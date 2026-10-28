@@ -4,7 +4,7 @@
 
 #include "utils.h"
 
-inline uint16_t satAddU16U16(uint16_t a, uint16_t b)
+uint16_t satAddU16U16(uint16_t a, uint16_t b)
 {
 	uint16_t r;
 
@@ -13,7 +13,7 @@ inline uint16_t satAddU16U16(uint16_t a, uint16_t b)
 	return r;
 }
 
-inline uint16_t satAddU16S32(uint16_t a, int32_t b)
+uint16_t satAddU16S32(uint16_t a, int32_t b)
 {
 	int32_t r;
 
@@ -25,7 +25,7 @@ inline uint16_t satAddU16S32(uint16_t a, int32_t b)
 	return (uint16_t)r;
 }
 
-inline uint16_t satAddU16S16(uint16_t a, int16_t b)
+uint16_t satAddU16S16(uint16_t a, int16_t b)
 {
 	int32_t r;
 
@@ -38,7 +38,7 @@ inline uint16_t satAddU16S16(uint16_t a, int16_t b)
 	return r;
 }
 
-inline int32_t satAddS16S16(int16_t a, int16_t b)
+int32_t satAddS16S16(int16_t a, int16_t b)
 {
 	int32_t r;
 
@@ -50,12 +50,12 @@ inline int32_t satAddS16S16(int16_t a, int16_t b)
 	return r;
 }
 
-inline uint16_t lerp(uint16_t a,uint16_t b,uint8_t x)
+uint16_t lerp(uint16_t a,uint16_t b,uint8_t x)
 {
 	return a+(x*((b-a)>>8));
 }
 
-inline uint16_t computeShape(uint32_t phase, const uint16_t lookup[], int8_t interpolate)
+uint16_t computeShape(uint32_t phase, const uint16_t lookup[], int8_t interpolate)
 {
 	uint8_t ai,bi,x;
 	uint16_t a,b;
@@ -84,7 +84,7 @@ inline uint16_t computeShape(uint32_t phase, const uint16_t lookup[], int8_t int
 #include "mult16x16.h"
 #include "mult32x16.h"
 
-inline uint16_t scaleU16U16(uint16_t a, uint16_t b)
+uint16_t scaleU16U16(uint16_t a, uint16_t b)
 {
 	uint16_t r;
 	
@@ -93,7 +93,7 @@ inline uint16_t scaleU16U16(uint16_t a, uint16_t b)
 	return r;
 }
 
-inline int16_t scaleU16S16(uint16_t a, int16_t b)
+int16_t scaleU16S16(uint16_t a, int16_t b)
 {
 	uint16_t r;
 	
@@ -104,7 +104,7 @@ inline int16_t scaleU16S16(uint16_t a, int16_t b)
 
 #else
 
-inline uint16_t scaleU16U16(uint16_t a, uint16_t b)
+uint16_t scaleU16U16(uint16_t a, uint16_t b)
 {
 	uint16_t r;
 	
@@ -113,7 +113,7 @@ inline uint16_t scaleU16U16(uint16_t a, uint16_t b)
 	return r;
 }
 
-inline int16_t scaleU16S16(uint16_t a, int16_t b)
+int16_t scaleU16S16(uint16_t a, int16_t b)
 {
 	uint16_t r;
 	
@@ -125,7 +125,7 @@ inline int16_t scaleU16S16(uint16_t a, int16_t b)
 
 #endif
 
-inline int16_t scaleProportionalU16S16(uint16_t a, int16_t b)
+int16_t scaleProportionalU16S16(uint16_t a, int16_t b)
 {
 	uint16_t r;
     r=MIN((int32_t)(a*(1.0f + ((float)b)/65536.0f)),UINT16_MAX);
@@ -133,7 +133,7 @@ inline int16_t scaleProportionalU16S16(uint16_t a, int16_t b)
 }
 
 
-inline uint32_t lfsr(uint32_t v, uint8_t taps)
+uint32_t lfsr(uint32_t v, uint8_t taps)
 {
 	uint8_t b24;
 	

@@ -80,7 +80,7 @@ static void killHeldNotes(void)
 		finishPreviousNote();
 }
 
-inline void arp_setMode(arpMode_t mode, int8_t hold)
+void arp_setMode(arpMode_t mode, int8_t hold)
 {
 	// stop previous assigned notes
 

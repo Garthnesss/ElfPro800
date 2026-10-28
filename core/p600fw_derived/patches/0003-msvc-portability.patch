@@ -79,3 +79,177 @@
  {
  	// speed management
  
+@@ -158,7 +158,7 @@
+ void adsr_setGate(struct adsr_s * a, int8_t gate)
+ {
+ 	a->phase=0;
+-	a->stageLevel=((uint32_t)a->output<<16)/a->levelCV;
++	a->stageLevel=a->levelCV?((uint32_t)a->output<<16)/a->levelCV:0; /* P8 patch 0001: guard div-by-zero - levelCV is unset before the first note; AVR and Cortex-M UDIV-by-zero do not trap, x86 does */
+ 
+ 	if(gate)
+ 	{
+@@ -184,7 +184,7 @@
+ 	updateStageVars(adsr,sWait);
+ }
+ 
+-inline void adsr_setShape(struct adsr_s * adsr, int8_t shape)
++void adsr_setShape(struct adsr_s * adsr, int8_t shape)
+ {
+ 	adsr->shape=shape;
+ }
+@@ -196,12 +196,12 @@
+ 	updateIncrements(adsr);
+ }
+ 
+-inline adsrStage_t adsr_getStage(struct adsr_s * adsr)
++adsrStage_t adsr_getStage(struct adsr_s * adsr)
+ {
+ 	return adsr->stage;
+ }
+ 
+-inline uint16_t adsr_getOutput(struct adsr_s * adsr)
++uint16_t adsr_getOutput(struct adsr_s * adsr)
+ {
+ 	return adsr->output;
+ }
+@@ -211,7 +211,7 @@
+ 	memset(adsr,0,sizeof(struct adsr_s));
+ }
+ 
+-inline void adsr_update(struct adsr_s * a)
++void adsr_update(struct adsr_s * a)
+ {
+ 	// if bit 24 or higher is set, it's an overflow -> a timed stage is done!
+ 	
+@@ -80,7 +80,7 @@
+ 		finishPreviousNote();
+ }
+ 
+-inline void arp_setMode(arpMode_t mode, int8_t hold)
++void arp_setMode(arpMode_t mode, int8_t hold)
+ {
+ 	// stop previous assigned notes
+ 
+@@ -119,7 +119,7 @@
+ 		sineShape[i]=(cosf((i/255.0f+1.0f)*M_PI)+1.0f)/2.0f*65535.0f;
+ }
+ 
+-inline void lfo_update(struct lfo_s * l)
++void lfo_update(struct lfo_s * l)
+ {
+ 	// if bit 24 or higher is set, it's an overflow -> a half period is done!
+ 	
+@@ -115,7 +115,7 @@
+ 	} while(s&SEQ_CONT); // all notes with this bit set are part of the same "chord", e.g. which ae the continuation flag set 
+ }
+ 
+-inline void seq_setMode(int8_t track, seqMode_t mode)
++void seq_setMode(int8_t track, seqMode_t mode)
+ {
+ 	struct track *tp = &seq.tracks[track];
+ 	int8_t alreadyPlaying;
+@@ -4,7 +4,7 @@
+ 
+ #include "utils.h"
+ 
+-inline uint16_t satAddU16U16(uint16_t a, uint16_t b)
++uint16_t satAddU16U16(uint16_t a, uint16_t b)
+ {
+ 	uint16_t r;
+ 
+@@ -13,7 +13,7 @@
+ 	return r;
+ }
+ 
+-inline uint16_t satAddU16S32(uint16_t a, int32_t b)
++uint16_t satAddU16S32(uint16_t a, int32_t b)
+ {
+ 	int32_t r;
+ 
+@@ -25,7 +25,7 @@
+ 	return (uint16_t)r;
+ }
+ 
+-inline uint16_t satAddU16S16(uint16_t a, int16_t b)
++uint16_t satAddU16S16(uint16_t a, int16_t b)
+ {
+ 	int32_t r;
+ 
+@@ -38,7 +38,7 @@
+ 	return r;
+ }
+ 
+-inline int32_t satAddS16S16(int16_t a, int16_t b)
++int32_t satAddS16S16(int16_t a, int16_t b)
+ {
+ 	int32_t r;
+ 
+@@ -50,12 +50,12 @@
+ 	return r;
+ }
+ 
+-inline uint16_t lerp(uint16_t a,uint16_t b,uint8_t x)
++uint16_t lerp(uint16_t a,uint16_t b,uint8_t x)
+ {
+ 	return a+(x*((b-a)>>8));
+ }
+ 
+-inline uint16_t computeShape(uint32_t phase, const uint16_t lookup[], int8_t interpolate)
++uint16_t computeShape(uint32_t phase, const uint16_t lookup[], int8_t interpolate)
+ {
+ 	uint8_t ai,bi,x;
+ 	uint16_t a,b;
+@@ -84,7 +84,7 @@
+ #include "mult16x16.h"
+ #include "mult32x16.h"
+ 
+-inline uint16_t scaleU16U16(uint16_t a, uint16_t b)
++uint16_t scaleU16U16(uint16_t a, uint16_t b)
+ {
+ 	uint16_t r;
+ 	
+@@ -93,7 +93,7 @@
+ 	return r;
+ }
+ 
+-inline int16_t scaleU16S16(uint16_t a, int16_t b)
++int16_t scaleU16S16(uint16_t a, int16_t b)
+ {
+ 	uint16_t r;
+ 	
+@@ -104,7 +104,7 @@
+ 
+ #else
+ 
+-inline uint16_t scaleU16U16(uint16_t a, uint16_t b)
++uint16_t scaleU16U16(uint16_t a, uint16_t b)
+ {
+ 	uint16_t r;
+ 	
+@@ -113,7 +113,7 @@
+ 	return r;
+ }
+ 
+-inline int16_t scaleU16S16(uint16_t a, int16_t b)
++int16_t scaleU16S16(uint16_t a, int16_t b)
+ {
+ 	uint16_t r;
+ 	
+@@ -125,7 +125,7 @@
+ 
+ #endif
+ 
+-inline int16_t scaleProportionalU16S16(uint16_t a, int16_t b)
++int16_t scaleProportionalU16S16(uint16_t a, int16_t b)
+ {
+ 	uint16_t r;
+     r=MIN((int32_t)(a*(1.0f + ((float)b)/65536.0f)),UINT16_MAX);
+@@ -133,7 +133,7 @@
+ }
+ 
+ 
+-inline uint32_t lfsr(uint32_t v, uint8_t taps)
++uint32_t lfsr(uint32_t v, uint8_t taps)
+ {
+ 	uint8_t b24;
+ 	

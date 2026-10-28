@@ -119,7 +119,7 @@ void lfo_init(struct lfo_s * lfo)
 		sineShape[i]=(cosf((i/255.0f+1.0f)*M_PI)+1.0f)/2.0f*65535.0f;
 }
 
-inline void lfo_update(struct lfo_s * l)
+void lfo_update(struct lfo_s * l)
 {
 	// if bit 24 or higher is set, it's an overflow -> a half period is done!
 	
