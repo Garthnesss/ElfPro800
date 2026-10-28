@@ -27,8 +27,15 @@ target_include_directories(p8p600 PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/p600fw_derived/common
   ${CMAKE_CURRENT_SOURCE_DIR}/p600fw_derived/shims
 )
-target_compile_options(p8p600 PRIVATE -fgnu89-inline -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare)
+if(MSVC)
+  # cl rejects GCC-style -Wno-* flags outright (CI, 2026-10-28); the
+  # imported code is warning-noisy by upstream standards, so silence it.
+  # (No -fgnu89-inline needed: MSVC's C99 inline matches the clang path.)
+  target_compile_options(p8p600 PRIVATE /W0)
+else()
+  target_compile_options(p8p600 PRIVATE -fgnu89-inline -Wno-unused-parameter -Wno-unused-variable -Wno-sign-compare)
+endif()
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Generic")
+if(NOT MSVC AND NOT CMAKE_SYSTEM_NAME STREQUAL "Generic")
   target_link_libraries(p8p600 PUBLIC m)
 endif()
