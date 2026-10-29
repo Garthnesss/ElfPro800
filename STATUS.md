@@ -67,3 +67,25 @@ finds before going green (run 40793407923, head ab1e453):
 verified green on Linux, macOS, Windows and the ARM cross-build. Next
 milestone is V1 (JUCE plugin) per Garth's "expansion first, then V1".
 Local ctest remains 10/10; ARM text 52,149 B.
+
+## Update 2026-10-28 (night) — V1 plugin scaffold DONE, CI green incl. plugin jobs
+
+Name/branding settled per Garth: the product is **ElfPro800**, no
+"by ElfChords" line (mock updated to match). V1 scaffold landed in
+`plugin/` (JUCE 8.0.8 via FetchContent tarball): the processor owns the
+real 8-voice engine, ticks it at 2 kHz from the audio callback with the
+V0 boot guard, wires Cutoff/Resonance/Filter-Env-Amt through the
+engine's own preset struct, and renders with the V0 placeholder voice
+DSP. Editor is a scaffold (brand + 4 rotaries) ahead of the full panel.
+
+CI (run 40804676462): **all 6 jobs green** — host Linux/macOS/Windows,
+ARM, and plugin Ubuntu + macOS (VST3 + Standalone, + AU on macOS). The
+Linux plugin job caught one real bug on the way: the core libs needed
+PIC for the shared module link (fixed plugin-side only). Local VM build
+compiled every TU but its LTO links were OOM-killed with three other
+JUCE builds sharing the box, so LTO is off and CI carries the link proof.
+
+NOT yet done (next gates): load in a real DAW (pluginval + Live on
+Garth's Mac), the full panel UI from the mock, the parameter set beyond
+the first four, patch/preset management, CLAP, and the analogue voice
+model that replaces the placeholder DSP.
