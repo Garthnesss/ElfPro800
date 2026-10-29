@@ -41,6 +41,11 @@ static void setParam (const char* id, float v01)
     auto* p = P->apvts.getParameter (id);
     p->setValueNotifyingHost (p->convertTo0to1 (v01));
 }
+static void setChoice (const char* id, int index)
+{
+    auto* p = P->apvts.getParameter (id);
+    p->setValueNotifyingHost (p->convertTo0to1 ((float) index));
+}
 static void noteOn (juce::MidiBuffer& m, int note)  { m.addEvent (juce::MidiMessage::noteOn (1, note, 0.8f), 0); }
 static void noteOff (juce::MidiBuffer& m, int note) { m.addEvent (juce::MidiMessage::noteOff (1, note), 0); }
 
@@ -121,14 +126,14 @@ int main()
     setParam ("lfoTgtFilter", 0.0f); setParam ("lfoTgtPW", 0.0f);
     runBlock (midi);
     /* 8. choices land too */
-    setParam ("lfoShape", 1.0f); runBlock (midi);
+    setChoice ("lfoShape", 2); runBlock (midi);
     CHECK (currentPreset.steppedParameters[spLFOShape] == 2, "lfoShape choice = Random");
-    setParam ("tracking", 0.5f); runBlock (midi);
+    setChoice ("tracking", 1); runBlock (midi);
     CHECK (currentPreset.steppedParameters[spTrackingShift] == 1, "tracking choice = Half");
     /* 9. arp control reaches the arp module */
-    setParam ("arpMode", 1.0f); runBlock (midi);
+    setChoice ("arpMode", 3); runBlock (midi);
     CHECK (arp_getMode() == amAssign, "arp mode applied");
-    setParam ("arpMode", 0.0f); runBlock (midi);
+    setChoice ("arpMode", 0); runBlock (midi);
     CHECK (arp_getMode() == amOff, "arp off applied");
     noteOff (midi, 57); runBlock (midi);
 
