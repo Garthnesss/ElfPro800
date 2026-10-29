@@ -42,3 +42,28 @@ replaced unrolled calls — slightly smaller than the 6-voice build).
 demo mixer gain lowered 0.25→0.11 for 8-voice headroom). Next: V1 JUCE
 plugin (6→8 voices already native now).
 
+
+## Update 2026-10-28 (evening) — repo live, CI green on all four jobs
+
+Pushed to **Garthnesss/ElfPro800** (his two web-UI seed commits preserved
+as ancestors; content replicated via the Git Data API, trees verified
+identical — remote SHAs differ from local because GitHub normalizes
+committer timezone offsets). CI then burned through five real portability
+finds before going green (run 40793407923, head ab1e453):
+
+1. `itoa` undeclared under clang (macOS) — declared in the print.h shim.
+2. MSVC `cl` rejects GCC `-Wno-*` flags + no libm — MSVC CMake branch.
+3. GCC `__attribute__` in FORCEINLINE/NOINLINE + packed struct — patch 0003.
+4. `M_PI` needs `_USE_MATH_DEFINES` under MSVC.
+5. GNU89 inline-export semantics (29→13→1 unresolved externals): MSVC
+   FORCEINLINE is empty; bare/mid-signature `inline` dropped from cross-TU
+   definitions (patch 0003); POSIX random/srandom implemented in compat.c.
+6. VS multi-config needed `ctest -C`; then the Debug-config ctest run
+   stalled 17 min with no output (cancelled via API; Debug CRT assert
+   dialog on the headless runner is the unproven prime suspect), so CI
+   builds/tests **Release** everywhere with a 120 s per-test timeout.
+
+**Both V0 deviations are now resolved:** the engine is 8-voice, and CI is
+verified green on Linux, macOS, Windows and the ARM cross-build. Next
+milestone is V1 (JUCE plugin) per Garth's "expansion first, then V1".
+Local ctest remains 10/10; ARM text 52,149 B.
