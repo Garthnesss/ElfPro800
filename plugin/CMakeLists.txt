@@ -15,6 +15,10 @@ FetchContent_Declare(JUCE
 FetchContent_MakeAvailable(JUCE)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core ${CMAKE_BINARY_DIR}/core)
+# The VST3/AU modules are shared objects: the core's static libs must be
+# PIC or ld refuses the link (R_X86_64_PC32 against `settings', found by
+# the ubuntu plugin CI job; macOS links it either way).
+set_target_properties(p8core p8p600 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(PLUGIN_FORMATS VST3 Standalone)
 if(APPLE)
