@@ -21,7 +21,7 @@ ElfPro800Editor::ElfPro800Editor (ElfPro800Processor& p) : AudioProcessorEditor 
     tBSaw = &addToggle ("bSaw", "SAW"); tBTri = &addToggle ("bTri", "TRI"); tBSqr = &addToggle ("bSqr", "PULSE");
     tSync = &addToggle ("sync", "SYNC");
 
-    kVolA = &addKnob ("volA", "OSC A"); kVolB = &addKnob ("volB", "OSC B"); kDrive = &addKnob ("drive", "DRIVE");
+    kMix = &addKnob ("mix", "MIX A/B"); kDrive = &addKnob ("drive", "DRIVE");
 
     kPmodFilEnv = &addKnob ("pmodFilEnv", "FIL ENV"); kPmodOscB = &addKnob ("pmodOscB", "OSC B");
     tPmodFA = &addToggle ("pmodFA", "FREQ A"); tPmodFil = &addToggle ("pmodFil", "FILTER");
@@ -204,7 +204,7 @@ void ElfPro800Editor::resized()
     }
     {
         auto inner = addSection (row1.removeFromLeft (196), "MIXER");
-        layoutKnobRow (inner.removeFromTop (72), { kVolA, kVolB, kDrive }, 48);
+        layoutKnobRow (inner.removeFromTop (72), { kMix, kDrive }, 52);
         row1.removeFromLeft (8);
     }
     {

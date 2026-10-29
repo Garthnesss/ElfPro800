@@ -11,6 +11,7 @@
 extern "C" {
 #include "storage.h"
 #include "arp.h"
+#include "synth.h" /* mixer_volumeFromMixAndDrive */
 }
 
 static ElfPro800Processor* P = nullptr;
@@ -82,13 +83,13 @@ int main()
     /* 5. every continuous parameter lands in the engine preset struct */
     struct CP { const char* id; int cp; };
     const CP cps[] = {
-        { "freqA", cpFreqA }, { "volA", cpVolA }, { "pwA", cpAPW }, { "freqB", cpFreqB },
-        { "volB", cpVolB }, { "pwB", cpBPW }, { "fineB", cpFreqBFine }, { "cutoff", cpCutoff },
+        { "freqA", cpFreqA }, { "pwA", cpAPW }, { "freqB", cpFreqB },
+        { "pwB", cpBPW }, { "fineB", cpFreqBFine }, { "cutoff", cpCutoff },
         { "resonance", cpResonance }, { "filEnvAmt", cpFilEnvAmt }, { "filAtt", cpFilAtt },
         { "filDec", cpFilDec }, { "filSus", cpFilSus }, { "filRel", cpFilRel },
         { "ampAtt", cpAmpAtt }, { "ampDec", cpAmpDec }, { "ampSus", cpAmpSus }, { "ampRel", cpAmpRel },
         { "pmodFilEnv", cpPModFilEnv }, { "pmodOscB", cpPModOscB }, { "lfoFreq", cpLFOFreq },
-        { "lfoAmt", cpLFOAmt }, { "glide", cpGlide }, { "unisonDetune", cpUnisonDetune },
+        { "lfoAmt", cpLFOAmt }, { "unisonDetune", cpUnisonDetune },
         { "spread", cpSpread }, { "drive", cpDrive }, { "ampVel", cpAmpVelocity }, { "filVel", cpFilVelocity },
     };
     noteOn (midi, 57);
@@ -130,6 +131,25 @@ int main()
     setParam ("arpMode", 0.0f); runBlock (midi);
     CHECK (arp_getMode() == amOff, "arp off applied");
     noteOff (midi, 57); runBlock (midi);
+
+    /* 5b. mixer law (SCI layout): Mix + Drive derive cpVolA/cpVolB, and
+       the Glide knob writes the shared cpGlideVolB slot -> cpGlide. */
+    setParam ("drive", 0.75f); setParam ("mix", 0.123f);
+    runBlock (midi);
+    {
+        const uint16_t mix = (uint16_t) std::lround (0.123f * 65535.0f);
+        const uint16_t drv = (uint16_t) std::lround (0.75f * 65535.0f);
+        CHECK (std::abs ((int) currentPreset.continuousParameters[cpVolA]
+                         - (int) mixer_volumeFromMixAndDrive (mix, drv)) <= 4, "mix -> volA law");
+        CHECK (std::abs ((int) currentPreset.continuousParameters[cpVolB]
+                         - (int) mixer_volumeFromMixAndDrive ((uint16_t) (65535 - mix), drv)) <= 4, "mix -> volB law");
+        CHECK (currentPreset.continuousParameters[cpMixVolA] == mix, "mix stored");
+        CHECK (currentPreset.continuousParameters[cpDrive] == drv, "drive stored");
+    }
+    setParam ("glide", 0.123f); runBlock (midi);
+    CHECK (currentPreset.continuousParameters[cpGlide]
+           == (uint16_t) std::lround (0.123f * 65535.0f), "glide via cpGlideVolB");
+    setParam ("glide", 0.0f); runBlock (midi);
 
     /* 10. preset switching: Sync Lead (index 2) sets its cutoff */
     proc.setCurrentProgram (2);

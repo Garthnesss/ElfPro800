@@ -46,7 +46,7 @@ private:
     std::vector<std::unique_ptr<Knob>> knobs;
     std::vector<std::unique_ptr<Toggle>> toggles;
     std::vector<std::unique_ptr<Seg>> segs;
-    Knob *kFreqA{}, *kVolA{}, *kPwA{}, *kFreqB{}, *kVolB{}, *kPwB{}, *kFineB{},
+    Knob *kFreqA{}, *kMix{}, *kPwA{}, *kFreqB{}, *kPwB{}, *kFineB{},
          *kCutoff{}, *kReso{}, *kFilEnvAmt{},
          *kFilAtt{}, *kFilDec{}, *kFilSus{}, *kFilRel{},
          *kAmpAtt{}, *kAmpDec{}, *kAmpSus{}, *kAmpRel{},

@@ -6,7 +6,7 @@
 extern "C" {
 #include "engine_bridge.h" /* refreshFullState */
 #include "arp.h"           /* arp_setMode, arpMode_t */
-#include "synth.h"         /* mt* LFO target bits */
+#include "synth.h"         /* mt* LFO target bits, mixer_updatePanelLayout */
 }
 
 /* ------------------------------------------------------------------ */
@@ -15,9 +15,9 @@ extern "C" {
 namespace {
 struct ContDef { const char* id; const char* name; int cp; };
 const ContDef CONT[] = {
-    { "freqA", "Osc A Freq", cpFreqA },       { "volA", "Osc A Level", cpVolA },
+    { "freqA", "Osc A Freq", cpFreqA },       { "mix", "Osc Mix", cpMixVolA },
     { "pwA", "Osc A Pulse Width", cpAPW },    { "freqB", "Osc B Freq", cpFreqB },
-    { "volB", "Osc B Level", cpVolB },        { "pwB", "Osc B Pulse Width", cpBPW },
+    { "pwB", "Osc B Pulse Width", cpBPW },
     { "fineB", "Osc B Fine", cpFreqBFine },   { "cutoff", "Cutoff", cpCutoff },
     { "resonance", "Resonance", cpResonance },{ "filEnvAmt", "Filter Env Amt", cpFilEnvAmt },
     { "filAtt", "Filter Attack", cpFilAtt },  { "filDec", "Filter Decay", cpFilDec },
@@ -27,7 +27,7 @@ const ContDef CONT[] = {
     { "pmodFilEnv", "PolyMod Fil Env", cpPModFilEnv },
     { "pmodOscB", "PolyMod Osc B", cpPModOscB },
     { "lfoFreq", "LFO Freq", cpLFOFreq },     { "lfoAmt", "LFO Amount", cpLFOAmt },
-    { "glide", "Glide", cpGlide },            { "unisonDetune", "Unison Detune", cpUnisonDetune },
+    { "glide", "Glide", cpGlideVolB },            { "unisonDetune", "Unison Detune", cpUnisonDetune },
     { "spread", "Spread", cpSpread },         { "drive", "Drive", cpDrive },
     { "ampVel", "Amp Velocity", cpAmpVelocity }, { "filVel", "Filter Velocity", cpFilVelocity },
 };
@@ -163,22 +163,22 @@ void ElfPro800Processor::buildFactoryPresets()
     mk ({}, {}); /* Init = engine default */
     mk ({ { cpCutoff, .55f }, { cpResonance, .18f }, { cpFilEnvAmt, .50f }, { cpFilAtt, .16f },
           { cpFilDec, .38f }, { cpFilSus, .55f }, { cpFilRel, .30f }, { cpAmpAtt, .10f },
-          { cpAmpDec, .30f }, { cpAmpSus, .85f }, { cpAmpRel, .32f }, { cpVolB, .55f } },
+          { cpAmpDec, .30f }, { cpAmpSus, .85f }, { cpAmpRel, .32f }, { cpMixVolA, .45f }, { cpDrive, .55f } },
         { { spBSaw, 1 } }); /* Analog Brass */
     mk ({ { cpFreqB, .585f }, { cpCutoff, .72f }, { cpResonance, .30f }, { cpGlide, .22f },
-          { cpAmpDec, .40f }, { cpAmpSus, .90f }, { cpDrive, .25f } },
+          { cpAmpDec, .40f }, { cpAmpSus, .90f }, { cpDrive, .60f }, { cpMixVolA, .50f } },
         { { spSync, 1 }, { spASaw, 1 }, { spBSaw, 1 } }); /* Sync Lead */
     mk ({ { cpCutoff, .30f }, { cpResonance, .38f }, { cpFilEnvAmt, .68f }, { cpFilDec, .35f },
           { cpFilSus, .20f }, { cpAmpAtt, .02f }, { cpAmpDec, .45f }, { cpAmpSus, .95f },
-          { cpDrive, .55f }, { cpVolB, .35f }, { cpFreqB, .25f } },
+          { cpDrive, .70f }, { cpMixVolA, .30f }, { cpFreqB, .25f } },
         { { spASqr, 1 } }); /* Deep Bass */
     mk ({ { cpCutoff, .50f }, { cpResonance, .12f }, { cpFilAtt, .45f }, { cpAmpAtt, .50f },
           { cpAmpRel, .60f }, { cpFilRel, .55f }, { cpSpread, .65f }, { cpLFOAmt, .18f },
-          { cpLFOFreq, .22f }, { cpVolB, .70f } },
+          { cpLFOFreq, .22f }, { cpMixVolA, .55f }, { cpDrive, .50f } },
         { { spBTri, 1 }, { spLFOTargets, mtVCF } }); /* Glass Pad */
     mk ({ { cpAmpAtt, .01f }, { cpAmpDec, .22f }, { cpAmpSus, .05f }, { cpAmpRel, .18f },
           { cpFilDec, .25f }, { cpFilSus, .10f }, { cpCutoff, .62f }, { cpResonance, .42f },
-          { cpFilEnvAmt, .55f }, { cpDrive, .20f } },
+          { cpFilEnvAmt, .55f }, { cpDrive, .55f }, { cpMixVolA, .50f } },
         { { spASaw, 1 } }); /* Pluck */
     presetsBuilt = true;
 }
@@ -201,6 +201,12 @@ void ElfPro800Processor::prepareToPlay (double sampleRate, int)
     for (auto& v : voices) v = Voice {};
     p8_core_init (&core);
     preset_loadDefault (1);
+    /* SCI panel layout: oscillator levels are derived from the Mix and
+       Drive parameters (and Glide shares the cpGlideVolB pot slot) - the
+       engine recomputes cpVolA/cpVolB/cpGlide from those on every refresh,
+       so the panel binds to the source parameters, never the derived ones. */
+    settings.panelLayout = 1;
+    mixer_updatePanelLayout (1);
     refreshFullState();
     basePreset = currentPreset;
     buildFactoryPresets();
