@@ -125,3 +125,23 @@ lists Apple units only, same for the older ElfDrumLXR component) - the
 AU check therefore happens inside Live's own scan in the GUI session.
 Awaiting Garth's ears: load ElfPro800 (VST3) in Live, play it, sweep
 the panel.
+
+## Update 2026-10-28 (night) — CV-driven renderer; every knob now audible
+
+Garth's Live test verdict: sound worked, presets barely differed, most
+knobs seemed unrouted. He was right: the harness had proven the control
+path (panel -> engine preset struct), but the V0 placeholder DSP only
+listened to the amp/filter CVs. Fixed by replacing it with a CV-driven
+renderer (pitch from osc CVs - calibrated 6148 units/octave, A440 =
+21649 - PolyBLEP saw/tri/pulse, PW from pw CVs, levels from vol CVs,
+per-voice TPT SVF from fil/res CVs, hard sync, amp CV envelope). Arp
+rate is wired too (settings.seqArpClock). Harness section 11 now
+asserts AUDIBILITY per control (transpose ratio 2.00 by ZCR, 50%-pulse
+2nd-harmonic null 0.001 vs 0.915 narrow, resonance brightness x3, LFO
+pitch wobble 21x). CI run 40818390542: all 6 jobs green; Mac rebuilt,
+harness passes there with identical numbers, bundles reinstalled.
+
+One more real bug found en route: converting the panel layout to SCI
+before the boot-guard ticks read half-loaded preset levels and derived
+Drive=0, silently zeroing both oscillator levels (latent since the SCI
+switch; the old DSP never used the vol CVs). Boot guard now runs first.
