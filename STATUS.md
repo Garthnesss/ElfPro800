@@ -153,3 +153,57 @@ switch; the old DSP never used the vol CVs). Boot guard now runs first.
 - **Canary:** Analog Brass amp attack 0.10 → 0.45 (slow swell) so a working switch is unmissable. Plugin VERSION 1.1.0 so hosts treat the bundle as changed.
 - Debug note: the §12 crash during development was a harness bug (wrong param id "reso" vs "resonance" → null deref in the test helper, now guarded), not engine/plugin code — the engine's preset_loadCurrent/preset_saveCurrent were probe-verified standalone first.
 - Mac: rebuilt, harness PASS (identical), VST3/AU/Standalone reinstalled + re-sealed. NEXT GATE: Garth re-tests in a fresh Live session; if presets still don't move the sound there, the Standalone app is the control experiment (same code, no host).
+
+## Update 2026-10-29 — design v2 built: v1.2.0 (hardware panel, scales + readout, step gate)
+
+Garth approved the Figma redesign with one correction: dials must show
+what they're set to. Research first (Prophet-600 manual: FREQUENCY is
+semitones over a four-octave range, notched per semitone; PRO-800 manual:
+same 4-octave FREQ, LFO ~0.25–20 Hz, PW 1–99%), then verified against
+THIS engine before printing anything:
+
+- FREQ A/B: ±24 semitones around the played note (probe + harness §11).
+- FINE B: ±50 cents (synth.c CV math: (raw>>7)−256 at 6148 CV/octave).
+- Envelope times measured with a dedicated probe (attack to 90% of the
+  59391 plateau, decay/release to 5%): attack 11 ms / 66 ms / 752 ms /
+  9.8 s / 135 s at v = 0/.25/.5/.75/1; SLOW multiplies by ~4 (the ADSR
+  speedShift 3 vs 1 in synth.c), now exposed as filEnvSlow/ampEnvSlow
+  parameters so the panel's SLOW pills are real controls.
+- Glide is a constant-rate slew (computeGlide): ~0.097 s/octave at v=0,
+  exponential in v. Unison detune spread ±146 cents max, linear.
+  cpSpread is per-voice envelope-time spread (not stereo panning).
+- LFO rate follows lfo.c's exponentialCourse law (~0.004–15.6 Hz);
+  the arp/step clock follows clock.c (steps/s = e^(2.979v), stopped
+  below v≈0.016).
+
+Built (plugin VERSION 1.2.0):
+- Editor rewritten to the Figma layout at 1320×764: PanelLAF
+  skeuomorphic knobs (tick ring, orange value arc, shaded body, pointer
+  dot), LED pill buttons, section captions, voice LEDs, corner screws.
+- Printed scales at engine-true positions: semitones on both FREQ
+  dials, ±50 cents on FINE, 100/1k/10k Hz on CUTOFF (from the
+  renderer's fc law), 0.1/1/10 Hz on LFO RATE (from the firmware law).
+- Last-touched readout in the LED display (green second line): turning
+  any control shows its name + real value ("OSC B FREQ +12.0 ST",
+  "AMP ATTACK 752 MS", "CUTOFF 3.21 KHZ"). Formatters live in the
+  editor as statics and are pinned by harness §15 (19 assertions).
+- Mixer LED meters fed from the frame's vol_a/vol_b CVs.
+- 16-step GATE sequencer: pads toggle steps, PLAY gates the output on
+  the shared arp RATE clock, REC captures held notes into steps live;
+  pattern + transport persist in plugin state. (The engine's own
+  recorder sequencer remains future work; this is a panel-level gate,
+  and the UI copy says so.)
+- Harness §14 (rendered-audio proof): on-step median RMS 0.1688 vs
+  off-step 0.0000 over 220 blocks; REC fills all 16 steps under a held
+  note and clears them on release. §13 editor now created at 1320×764.
+- New dev tool: ElfPro800Snapshot renders the editor offscreen to PNG.
+- Evidence: core ctest 10/10; harness PASS locally (all sections);
+  CI run 40835673570 all 6 jobs green.
+- Local VM notes: the standalone link was OOM-killed under contention
+  (CI carries link proof); re-running the plugin configure on this VM
+  currently fails inside juceaide (no X11 Xrandr.h here — a pre-existing
+  environment gap, first hit Oct 28), so fresh local configures are
+  blocked until the header exists. Existing build tree still works.
+- Mac reinstall pending: the SSH/Tailscale tunnel refused every
+  attempt on Oct 29 (~00:40, proxy closes during CONNECT). Bundles are
+  CI-green and waiting for a git pull on the Mac once the tunnel is back.
