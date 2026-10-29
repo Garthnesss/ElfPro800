@@ -174,8 +174,9 @@ int main()
        the CV-driven renderer (Garth's Live-test feedback, 2026-10-28). */
     auto renderHeld = [&] (int captureBlocks) {
         std::vector<float> out;
-        juce::MidiBuffer m;
-        for (int i = 0; i < 25; ++i) blockRMS (m); /* settle attack */
+        /* settle on the SHARED midi buffer: the first blockRMS call is
+           what delivers the note-on queued by the test */
+        for (int i = 0; i < 25; ++i) blockRMS (midi);
         for (int i = 0; i < captureBlocks; ++i) {
             juce::AudioBuffer<float> buf (2, BLOCK);
             buf.clear();
@@ -228,13 +229,25 @@ int main()
     CHECK (tri.bright < base.bright * 0.65, "triangle darker than saw");
     setParam ("aTri", 0.0f); setParam ("aSqr", 1.0f); runBlock (midi);
 
-    /* pulse width: narrow pulse sounds different from 50% */
+    /* pulse width: a 50% pulse has NO even harmonics; a narrow pulse is
+       full of them. Measure 2nd-harmonic / fundamental (Goertzel). */
+    auto goertzel = [&] (const std::vector<float>& x, double freq) {
+        const double w = 2.0 * juce::MathConstants<double>::pi * freq / SR;
+        const double cw = std::cos (w), coeff = 2.0 * cw;
+        double s0 = 0, s1 = 0, s2 = 0;
+        for (float v : x) { s0 = v + coeff * s1 - s2; s2 = s1; s1 = s0; }
+        return std::sqrt (s1 * s1 + s2 * s2 - coeff * s1 * s2) / (double) x.size();
+    };
+    auto harmRatio = [&] (const std::vector<float>& x) {
+        return goertzel (x, 523.25) / juce::jmax (1e-9, goertzel (x, 261.63));
+    };
     setParam ("pwA", 0.5f); runBlock (midi);
-    auto pw50 = measure (renderHeld (60));
+    auto pw50 = renderHeld (60);
     setParam ("pwA", 0.13f); runBlock (midi);
-    auto pw13 = measure (renderHeld (60));
-    std::printf ("pw50 bright %.3f pw13 bright %.3f rms %.4f/%.4f\n", pw50.bright, pw13.bright, pw50.rms, pw13.rms);
-    CHECK (pw13.bright > pw50.bright * 1.2, "narrow pulse brighter");
+    auto pw13 = renderHeld (60);
+    const double r50 = harmRatio (pw50), r13 = harmRatio (pw13);
+    std::printf ("pw50 2nd/fund %.3f pw13 %.3f\n", r50, r13);
+    CHECK (r13 > r50 * 4.0 && r13 > 0.25, "pulse width reshapes harmonic content");
     setParam ("aSqr", 0.0f); setParam ("aSaw", 1.0f); setParam ("pwA", 0.5f); runBlock (midi);
 
     /* osc B alone, +12 st via freqB */

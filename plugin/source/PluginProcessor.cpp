@@ -216,6 +216,20 @@ void ElfPro800Processor::prepareToPlay (double sampleRate, int)
     for (auto& v : dvoices) v = DVoice {};
     p8_core_init (&core);
     preset_loadDefault (1);
+    refreshFullState();
+    /* Boot guard FIRST (V0 finding: the post-init preset load settles
+       over ~200 ticks). The panel-layout conversion below must only run
+       after the load completes: converting mid-load reads half-loaded
+       oscillator levels and derives Mix=0.5 / Drive=0, which the mixer
+       law turns into vol_a = vol_b = 0 - a silent synth. (Found by the
+       harness the day the renderer started listening to the vol CVs;
+       it had been latent since the SCI switch, inaudible under the old
+       placeholder DSP.) */
+    {
+        p8_inputs_t in {}; p8_cv_frame_t f {};
+        for (int i = 0; i < 200; ++i) p8_core_tick (&core, &in, &f);
+        frame = f;
+    }
     /* SCI panel layout: oscillator levels are derived from the Mix and
        Drive parameters (and Glide shares the cpGlideVolB pot slot) - the
        engine recomputes cpVolA/cpVolB/cpGlide from those on every refresh,
@@ -230,11 +244,6 @@ void ElfPro800Processor::prepareToPlay (double sampleRate, int)
     if (auto* p = apvts.getParameter ("arpRate"))
         p->setValueNotifyingHost (p->convertTo0to1 (settings.seqArpClock / 65535.0f));
     arpRateApplied = 0xffff;
-    /* Boot guard (V0 finding): notes gated during the engine's post-init
-       preset load are dropped; run 200 silent ticks before going live. */
-    p8_inputs_t in {}; p8_cv_frame_t f {};
-    for (int i = 0; i < 200; ++i) p8_core_tick (&core, &in, &f);
-    frame = f;
 }
 
 void ElfPro800Processor::releaseResources() {}
