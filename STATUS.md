@@ -89,3 +89,26 @@ NOT yet done (next gates): load in a real DAW (pluginval + Live on
 Garth's Mac), the full panel UI from the mock, the parameter set beyond
 the first four, patch/preset management, CLAP, and the analogue voice
 model that replaces the placeholder DSP.
+
+## Update 2026-10-28 (late) — FULL PANEL UI DONE, harness green in CI
+
+The plugin editor is now the full panel from the approved mock, and
+every control is wired: 28 knobs (all continuous engine params), 10
+stepped toggles, LFO target toggles (bitmask), LFO shape + filter
+tracking segmented controls, the arpeggiator (mode + hold via
+arp_setMode), six factory presets with LCD + prev/next (also exposed
+as host programs), and live voice LEDs driven by the engine's amp CVs.
+
+A headless harness (plugin/test) runs in CI and proves the wiring
+without a DAW: silence -> chord sustain (RMS 0.118) -> cutoff changes
+the rendered audio -> release tail decays -> every parameter asserted
+in currentPreset / the arp module -> preset switching applies.
+
+It caught two real engine truths on the way:
+1. cpVolA/cpVolB are DERIVED (recomputed each refresh from cpMixVolA +
+   cpDrive; Glide shares cpGlideVolB). Panel binds the sources: Mixer =
+   MIX A/B + DRIVE, processor selects the SCI panel layout at init.
+2. JUCE choice parameters convert by index, not 0..1 (test-helper fix).
+
+CI run 40810650803: **all 6 jobs green** including the harness on both
+plugin platforms. Next gate: Garth loads it in Live on his Mac.
