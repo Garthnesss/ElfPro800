@@ -67,7 +67,11 @@ target_sources(ElfPro800Harness PRIVATE
   source/PluginProcessor.cpp
   source/PluginEditor.cpp
   test/Harness.cpp)
-target_compile_definitions(ElfPro800Harness PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_compile_definitions(ElfPro800Harness PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+  # This VM (and minimal CI images) have the X11 runtime libs but not all
+  # -dev headers; the plugin target auto-detects that, the console app
+  # does not, so state it explicitly.
+  JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0 JUCE_USE_XCURSOR=0)
 target_link_libraries(ElfPro800Harness PRIVATE
   p8core juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
 enable_testing()
