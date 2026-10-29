@@ -9,8 +9,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cmake -B build -S .
-      - run: cmake --build build
-      - run: ctest --test-dir build -C Debug --output-on-failure # -C: VS multi-config puts exes in Debug/; ignored by single-config generators
+      # Release everywhere: it is the config a plugin ships in, and the MSVC
+      # Debug CRT can park a headless runner on a modal assert dialog (the
+      # 2026-10-28 Windows Debug ctest run stalled 17 min with no output and
+      # had to be cancelled). --timeout keeps any future stall visible.
+      - run: cmake --build build --config Release
+      - run: ctest --test-dir build -C Release --timeout 120 --output-on-failure
   arm:
     runs-on: ubuntu-latest
     steps:
