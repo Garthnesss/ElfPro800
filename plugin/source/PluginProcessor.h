@@ -61,6 +61,22 @@ public:
     float getVoiceLevel (int v) const { return voiceLevel[(size_t) v].load(); }
     int getArpMode() const { return arpModeApplied; }
 
+    /* Mixer meters (per-oscillator levels from the engine frame). */
+    float getMixLevelA() const { return mixLevelA.load(); }
+    float getMixLevelB() const { return mixLevelB.load(); }
+
+    /* Step-gate sequencer: 16 gate steps clocked by the same exponential
+       law as the arpeggiator (they share the RATE knob). PLAY gates the
+       output per the pattern; REC captures held notes into steps. */
+    bool seqIsPlaying() const { return seqPlaying.load(); }
+    bool seqIsRec() const { return seqRec.load(); }
+    void seqSetPlaying (bool b) { seqPlaying.store (b); }
+    void seqSetRec (bool b) { seqRec.store (b); }
+    int seqGetStep() const { return seqStep.load(); }
+    uint32_t seqGetPattern() const { return seqPattern.load(); }
+    void seqToggleStep (int i) { if (i >= 0 && i < 16) seqPattern.fetch_xor (1u << (unsigned) i); }
+    static double seqStepsPerSec (double v01);
+
     juce::AudioProcessorValueTreeState apvts;
 
     /* parameter ids (shared with the editor and the headless harness) */
@@ -111,6 +127,12 @@ private:
     uint16_t arpRateApplied = 0xffff;
 
     std::array<std::atomic<float>, 8> voiceLevel {};
+    std::atomic<float> mixLevelA {}, mixLevelB {};
+    std::atomic<bool> seqPlaying { false }, seqRec { false };
+    std::atomic<int> seqStep { 0 };
+    std::atomic<uint32_t> seqPattern { 21909 }; /* steps 0,2,4,7,8,10,12,14 */
+    double seqPhase = 0.0, gateGain = 1.0; /* audio thread only */
+    int heldNotes = 0;                     /* audio thread only */
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ElfPro800Processor)
 };

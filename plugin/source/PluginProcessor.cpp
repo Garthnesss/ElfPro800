@@ -40,6 +40,7 @@ const BoolDef BOOLS[] = {
     { "bTri", "Osc B Triangle", spBTri }, { "bSqr", "Osc B Square", spBSqr },
     { "sync", "Osc B Sync", spSync },  { "pmodFA", "PolyMod to Freq A", spPModFA },
     { "pmodFil", "PolyMod to Filter", spPModFil }, { "unison", "Unison", spUnison },
+    { "filEnvSlow", "Filter Env Slow", spFilEnvSlow }, { "ampEnvSlow", "Amp Env Slow", spAmpEnvSlow },
 };
 struct TgtDef { const char* id; const char* name; int bit; };
 const TgtDef TGTS[] = {
@@ -478,6 +479,11 @@ void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         while (evIdx < numEvs && evs[(size_t) evIdx].tick <= tick) {
             const Ev& e = evs[(size_t) evIdx++];
             if (n + e.len <= sizeof (chunk)) { std::memcpy (chunk + n, e.bytes, (size_t) e.len); n = (uint16_t) (n + e.len); }
+            if (e.len >= 3) { /* held-note tracking for step-gate REC */
+                const uint8_t st = e.bytes[0] & 0xf0;
+                if (st == 0x90 && e.bytes[2] > 0) ++heldNotes;
+                else if (st == 0x80 || (st == 0x90 && e.bytes[2] == 0)) heldNotes = juce::jmax (0, heldNotes - 1);
+            }
         }
         if (n) { in.midi_in = chunk; in.midi_in_len = n; }
         p8_core_tick (&core, &in, &frame);
@@ -488,6 +494,28 @@ void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         const double dutyA = juce::jlimit (0.03, 0.97, frame.pw_a / 65535.0);
         const double dutyB = juce::jlimit (0.03, 0.97, frame.pw_b / 65535.0);
         const double lvlA = frame.vol_a / 65535.0, lvlB = frame.vol_b / 65535.0;
+        mixLevelA.store ((float) lvlA);
+        mixLevelB.store ((float) lvlB);
+
+        /* step gate: advance on the arp clock law, smooth the gain */
+        {
+            const double sps = seqStepsPerSec (arpRateApplied == 0xffff ? 0.5 : arpRateApplied / 65535.0);
+            if (seqPlaying.load() && sps > 0.0) {
+                seqPhase += sps * samplesPerTick / sr;
+                while (seqPhase >= 1.0) {
+                    seqPhase -= 1.0;
+                    const int ns = (seqStep.load() + 1) & 15;
+                    seqStep.store (ns);
+                    if (seqRec.load()) {
+                        const uint32_t bit = 1u << (unsigned) ns;
+                        if (heldNotes > 0) seqPattern.fetch_or (bit);
+                        else seqPattern.fetch_and (~bit);
+                    }
+                }
+            }
+            const double target = (! seqPlaying.load() || ((seqPattern.load() >> (unsigned) seqStep.load()) & 1u)) ? 1.0 : 0.0;
+            gateGain += (target - gateGain) * 0.10;
+        }
         double incA[8], incB[8], a1[8], a2[8], a3[8];
         for (int v = 0; v < 8; ++v) {
             incA[v] = freqFromCV (frame.osc_a[v]) / sr;
@@ -534,7 +562,7 @@ void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
                 dv.ic2 = 2.0 * v2 - dv.ic2;
                 mix += v2 * amp;
             }
-            const double soft = mix * 0.9;
+            const double soft = mix * 0.9 * gateGain;
             const float out = (float) (volume * (soft / (1.0 + std::abs (soft))));
             outL[s] = out;
             if (outR) outR[s] = out;
@@ -557,6 +585,8 @@ void ElfPro800Processor::getStateInformation (juce::MemoryBlock& destData)
     for (int i = 0; i < USER_SLOTS; ++i)
         storage_read ((uint32_t) i, (uint8_t*) pages.getData() + (size_t) i * 256);
     state.setProperty ("userPages", juce::var (pages), nullptr);
+    state.setProperty ("seqPattern", (int) seqPattern.load(), nullptr);
+    state.setProperty ("seqPlaying", seqPlaying.load(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, destData);
 }
 void ElfPro800Processor::setStateInformation (const void* data, int sizeInBytes)
@@ -573,7 +603,20 @@ void ElfPro800Processor::setStateInformation (const void* data, int sizeInBytes)
                 }
             }
             presetRequest.store ((int) tree.getProperty ("presetIndex", 0));
+            if (tree.hasProperty ("seqPattern")) seqPattern.store ((uint32_t) (int) tree.getProperty ("seqPattern"));
+            if (tree.hasProperty ("seqPlaying")) seqPlaying.store ((bool) tree.getProperty ("seqPlaying"));
         }
+}
+
+double ElfPro800Processor::seqStepsPerSec (double v01)
+{
+    /* The engine clock (clock.c, internal sync): the step interval in
+       500 Hz timer ticks is exponentialCourse(speed, 22000, 500), so
+       steps/sec = exp(speed / 22000). Below speed 1024 the engine clock
+       is effectively stopped. */
+    const double sv = v01 * 65535.0;
+    if (sv < 1024.0) return 0.0;
+    return std::exp (sv / 22000.0);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new ElfPro800Processor(); }

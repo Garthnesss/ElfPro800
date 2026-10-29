@@ -299,7 +299,7 @@ int main()
     {
         auto* ed = P->createEditor();
         CHECK (ed != nullptr, "editor created");
-        ed->setSize (1160, 648);
+        ed->setSize (1320, 764);
         P->requestPresetDelta (1); /* the LCD next button's exact call */
         runBlock (midi); runBlock (midi);
         CHECK (P->getPresetIndex() == 1, "editor-alive delta -> Brass");
@@ -348,6 +348,84 @@ int main()
         CHECK (! proc2.programIsEmpty (13), "restored instance sees slot 7");
         CHECK (std::abs ((int) currentPreset.continuousParameters[cpCutoff] - savedCut) <= 30, "restored instance loads saved cutoff");
         proc2.releaseResources();
+    }
+
+    /* 14. step-gate sequencer: audible gating + REC capture (fresh
+       processor instance; the engine is a process singleton so sections
+       run strictly sequentially). Thresholds set from the design: gate
+       smoothing ~5 ms << step 107 ms at rate 0.75 (9.3 steps/s), so
+       off-step blocks must be near-silent (median < 20% of on-step). */
+    std::printf ("== 14. step gate ==\n");
+    {
+        ElfPro800Processor proc3;
+        P = &proc3;
+        proc3.prepareToPlay (SR, BLOCK);
+        juce::MidiBuffer m3;
+        noteOn (m3, 60);
+        double ref = 0; for (int i = 0; i < 90; ++i) ref = blockRMS (m3);
+        std::printf ("gate bypass sustain RMS %.4f\n", ref);
+        CHECK (ref > 0.01, "gate section: note sustains");
+        setParam ("arpRate", 0.75f);
+        runBlock (m3);
+        CHECK (std::abs (ElfPro800Processor::seqStepsPerSec (0.75) - 9.34) < 0.05, "arp clock law 9.34 steps/s at 0.75");
+        proc3.seqSetPlaying (true);
+        for (int i = 0; i < 40; ++i) blockRMS (m3); /* settle into the pattern */
+        std::vector<double> onR, offR;
+        for (int i = 0; i < 220; ++i) {
+            const int step = proc3.seqGetStep();
+            const double r = blockRMS (m3);
+            (((proc3.seqGetPattern() >> (unsigned) step) & 1u) ? onR : offR).push_back (r);
+        }
+        auto median = [] (std::vector<double> v) {
+            std::sort (v.begin(), v.end());
+            return v.empty() ? 0.0 : v[v.size() / 2];
+        };
+        const double onMed = median (onR), offMed = median (offR);
+        std::printf ("gate on-step median %.4f, off-step median %.4f (on blocks %d, off %d)\n",
+                     onMed, offMed, (int) onR.size(), (int) offR.size());
+        CHECK (onR.size() > 40 && offR.size() > 40, "both step classes observed");
+        CHECK (onMed > 0.6 * ref, "on-steps pass the sound");
+        CHECK (offMed < 0.2 * onMed, "off-steps gate the sound shut");
+        /* REC capture: held note fills every step; silence clears them */
+        proc3.seqSetPlaying (false);
+        for (int i = 0; i < 16; ++i) if ((proc3.seqGetPattern() >> (unsigned) i) & 1u) proc3.seqToggleStep (i);
+        CHECK (proc3.seqGetPattern() == 0, "pattern cleared");
+        proc3.seqSetRec (true);
+        proc3.seqSetPlaying (true);
+        for (int i = 0; i < 220; ++i) blockRMS (m3); /* note 60 still held */
+        CHECK (proc3.seqGetPattern() == 0xffffu, "REC: held note fills all steps");
+        noteOff (m3, 60);
+        for (int i = 0; i < 220; ++i) blockRMS (m3);
+        CHECK (proc3.seqGetPattern() == 0, "REC: released note clears all steps");
+        proc3.seqSetRec (false);
+        proc3.seqSetPlaying (false);
+        proc3.releaseResources();
+        P = &proc;
+    }
+
+    /* 15. readout formatters: the exact strings the display will show */
+    std::printf ("== 15. readout formatters ==\n");
+    {
+        using E = ElfPro800Editor;
+        CHECK (E::formatValue ("freqA", 0.5f, false, false) == "0.0 ST", "freq centre = 0 ST");
+        CHECK (E::formatValue ("freqA", 0.75f, false, false) == "+12.0 ST", "freq 0.75 = +12 ST");
+        CHECK (E::formatValue ("freqB", 0.0f, false, false) == "-24.0 ST", "freq min = -24 ST");
+        CHECK (E::formatValue ("fineB", 1.0f, false, false) == "+50 CT", "fine max = +50 CT");
+        CHECK (E::formatValue ("fineB", 0.0f, false, false) == "-50 CT", "fine min = -50 CT");
+        CHECK (E::formatValue ("pwA", 0.5f, false, false) == "50 %", "pw centre = 50 %");
+        CHECK (E::formatValue ("cutoff", 0.0f, false, false) == "40 HZ", "cutoff min = 40 Hz");
+        CHECK (E::formatValue ("cutoff", 1.0f, false, false) == "17.50 KHZ", "cutoff max = 17.5 kHz");
+        CHECK (E::formatValue ("lfoFreq", 1.0f, false, false) == "16 HZ", "lfo max ~ 15.6 Hz");
+        CHECK (E::formatValue ("ampAtt", 0.0f, false, false) == "11 MS", "attack min = 11 ms");
+        CHECK (E::formatValue ("ampAtt", 0.5f, false, false) == "752 MS", "attack mid = 752 ms");
+        CHECK (E::formatValue ("ampAtt", 0.5f, false, true) == "3.0 S", "attack slow x4 = 3.0 s");
+        CHECK (E::formatValue ("filDec", 0.75f, false, false) == "5.9 S", "decay 0.75 = 5.9 s");
+        CHECK (E::formatValue ("glide", 0.0f, false, false) == "97 MS/OCT", "glide min = 97 ms/oct");
+        CHECK (E::formatValue ("arpRate", 0.0f, false, false) == "STOPPED", "arp rate 0 = stopped");
+        CHECK (E::formatValue ("arpRate", 0.75f, false, false) == "9.3 ST/S", "arp rate 0.75 = 9.3 st/s");
+        CHECK (E::formatValue ("unisonDetune", 0.5f, false, false) == juce::String::fromUTF8 ("±73 CT"), "detune half = ±73 ct");
+        CHECK (E::displayName ("freqA") == "OSC A FREQ", "display name freqA");
+        CHECK (E::displayName ("ampRel") == "AMP RELEASE", "display name ampRel");
     }
 
     std::printf ("HARNESS PASS\n");
