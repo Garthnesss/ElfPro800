@@ -21,7 +21,7 @@
 
 ## Open decisions (need the user's call)
 1. **Next step order** — 8-voice expansion first (recommended), or straight into the V1 JUCE plugin with 6 voices and expand later.
-2. **Final product name** — working title `elfchords-p8` only.
+2. ~~**Final product name**~~ — **resolved 2026-10-28: ElfPro800** (Garth's call; panel mock updated to match).
 3. **Repo home** — public vs private GitHub repo + name (Garth creates it; then CI can verify macOS/Windows and the work can be pushed).
 
 ## Next actions

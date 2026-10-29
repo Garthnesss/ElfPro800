@@ -1,6 +1,6 @@
-# elfchords-p8 (working title)
+# ElfPro800
 
-An 8-voice analog-polysynth core by **ElfChords — Garth Elfstrom**, shipped first as a VST3/AU/CLAP + standalone plugin and later as custom firmware for the Behringer PRO-800. Final product name TBD.
+An 8-voice analog-polysynth by **ElfChords — Garth Elfstrom**, shipped first as a VST3/AU/CLAP + standalone plugin and later as custom firmware for the Behringer PRO-800. Product name **ElfPro800** (Garth's call, 2026-10-28; matches the repo name).
 
 Canonical project docs: [PROJECT_TRUTH.md](PROJECT_TRUTH.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [ROADMAP.md](ROADMAP.md) · [STATUS.md](STATUS.md)
 
