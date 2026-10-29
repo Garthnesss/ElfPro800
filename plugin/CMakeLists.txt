@@ -75,5 +75,16 @@ target_compile_definitions(ElfPro800Harness PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_
   JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0 JUCE_USE_XCURSOR=0)
 target_link_libraries(ElfPro800Harness PRIVATE
   p8core juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+
+juce_add_console_app(ElfPro800Snapshot PRODUCT_NAME "ElfPro800Snapshot")
+juce_generate_juce_header(ElfPro800Snapshot)
+target_sources(ElfPro800Snapshot PRIVATE
+  source/PluginProcessor.cpp
+  source/PluginEditor.cpp
+  test/Snapshot.cpp)
+target_compile_definitions(ElfPro800Snapshot PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+  JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0 JUCE_USE_XCURSOR=0)
+target_link_libraries(ElfPro800Snapshot PRIVATE
+  p8core juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
 enable_testing()
 add_test(NAME harness COMMAND ElfPro800Harness)
