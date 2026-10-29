@@ -1,0 +1,57 @@
+cmake_minimum_required(VERSION 3.22)
+project(ElfPro800 VERSION 0.1.0 LANGUAGES C CXX)
+
+# V1 scaffold: JUCE 8 (AGPL-3.0, ADR-002) plugin wrapping the V0 core.
+# Build:  cmake -B build-plugin -S plugin -DCMAKE_BUILD_TYPE=Release
+#         cmake --build build-plugin
+# Produces VST3 + Standalone (AU too on macOS). CLAP comes via
+# clap-juce-extensions in a later milestone.
+
+include(FetchContent)
+# Tarball of the immutable 8.0.8 tag: one ~40 MB stream instead of a
+# full git clone (much faster through this VM's proxy; same content).
+FetchContent_Declare(JUCE
+  URL https://codeload.github.com/juce-framework/JUCE/tar.gz/refs/tags/8.0.8)
+FetchContent_MakeAvailable(JUCE)
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../core ${CMAKE_BINARY_DIR}/core)
+
+set(PLUGIN_FORMATS VST3 Standalone)
+if(APPLE)
+  list(APPEND PLUGIN_FORMATS AU)
+endif()
+
+juce_add_plugin(ElfPro800
+  COMPANY_NAME            "Garth Elfstrom"
+  BUNDLE_ID               com.garthelfstrom.elfpro800
+  PLUGIN_MANUFACTURER_CODE Elfc
+  PLUGIN_CODE             Ep80
+  FORMATS                 ${PLUGIN_FORMATS}
+  PRODUCT_NAME            "ElfPro800"
+  IS_SYNTH                TRUE
+  NEEDS_MIDI_INPUT        TRUE
+  NEEDS_MIDI_OUTPUT       FALSE
+  IS_MIDI_EFFECT          FALSE
+  COPY_PLUGIN_AFTER_BUILD FALSE)
+
+juce_generate_juce_header(ElfPro800)
+
+target_sources(ElfPro800 PRIVATE
+  source/PluginProcessor.cpp
+  source/PluginEditor.cpp)
+
+target_compile_definitions(ElfPro800 PUBLIC
+  JUCE_WEB_BROWSER=0
+  JUCE_USE_CURL=0
+  JUCE_VST3_CAN_REPLACE_VST2=0)
+
+target_link_libraries(ElfPro800 PRIVATE
+  p8core
+  juce::juce_audio_utils
+  juce::juce_dsp
+  PUBLIC
+  juce::juce_recommended_config_flags
+  # NOTE: no juce_recommended_lto_flags - the LTO link of the VST3 module
+  # was OOM-killed on the 8 GB dev VM (2026-10-28) and slows CI; a
+  # scaffold does not need it. Revisit for release builds.
+  juce::juce_recommended_warning_flags)

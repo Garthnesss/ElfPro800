@@ -1,5 +1,7 @@
-build/
-build-*/
-references/
 *.wav
 .DS_Store
+build-*/
+build-arm/
+build-plugin/
+build/
+references/
