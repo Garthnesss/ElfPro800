@@ -36,7 +36,15 @@ void p8_bridge_reset(void)
     memset(g_led_blink, 0, sizeof(g_led_blink));
     memset(g_mem, 0, sizeof(g_mem));
     memset(g_io, 0, sizeof(g_io));
-    memset(g_storage, 0xff, sizeof(g_storage)); /* erased EEPROM reads 0xFF, like the real 24LC512 */
+    /* The storage image is the synth's EEPROM: erase it only on the
+       first reset in the process. A plugin host may construct and
+       prepare several instances (scan, load, restore); their user
+       presets must survive that, so re-inits keep the image. */
+    static int storage_erased_once = 0;
+    if (!storage_erased_once) {
+        memset(g_storage, 0xff, sizeof(g_storage)); /* erased EEPROM reads 0xFF, like the real 24LC512 */
+        storage_erased_once = 1;
+    }
     memset(g_pot_changed, 0, sizeof(g_pot_changed));
     g_display[0] = ' '; g_display[1] = ' '; g_display[2] = ' '; g_display[3] = ' '; g_display[4] = '\0';
     g_midi_out_len = 0;

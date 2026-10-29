@@ -7,6 +7,7 @@ extern "C" {
 #include "engine_bridge.h" /* refreshFullState */
 #include "arp.h"           /* arp_setMode, arpMode_t */
 #include "clock.h"         /* clock_setSpeed */
+#include "hardware.h"      /* storage_read / storage_write (preset pages) */
 #include "synth.h"         /* mt* LFO target bits, mixer_updatePanelLayout */
 }
 
@@ -93,47 +94,120 @@ juce::AudioProcessorValueTreeState::ParameterLayout ElfPro800Processor::makeLayo
     return { params.begin(), params.end() };
 }
 
-void ElfPro800Processor::applyParamsToEngine()
+void ElfPro800Processor::captureShadows()
 {
-    bool changed = false;
-    auto getF = [&] (const char* id_) { return apvts.getRawParameterValue (id_)->load(); };
-
+    const size_t need = std::size (CONT) + std::size (BOOLS) + 1 + std::size (CHOICES);
+    if (hostShadow.size() != need) {
+        hostShadow.assign (need, -1.0f);
+        engineBaseline.assign (need, -1.0f);
+    }
+    size_t i = 0;
     for (const auto& d : CONT) {
-        const float v = getF (d.id);
-        const uint16_t nv = (uint16_t) std::lround (v * 65535.0f);
-        if (currentPreset.continuousParameters[d.cp] != nv) {
-            currentPreset.continuousParameters[d.cp] = nv; changed = true;
-        }
+        engineBaseline[i] = currentPreset.continuousParameters[d.cp] / 65535.0f;
+        hostShadow[i] = apvts.getRawParameterValue (d.id)->load();
+        ++i;
     }
     for (const auto& d : BOOLS) {
-        const uint8_t nv = getF (d.id) > 0.5f ? 1 : 0;
-        if (currentPreset.steppedParameters[d.sp] != nv) {
-            currentPreset.steppedParameters[d.sp] = nv; changed = true;
-        }
+        engineBaseline[i] = currentPreset.steppedParameters[d.sp] ? 1.0f : 0.0f;
+        hostShadow[i] = apvts.getRawParameterValue (d.id)->load() > 0.5f ? 1.0f : 0.0f;
+        ++i;
     }
     {
-        uint8_t mask = 0;
-        for (const auto& d : TGTS) if (getF (d.id) > 0.5f) mask |= (uint8_t) d.bit;
-        /* preserve the OnlyA/OnlyB bits (not panel-exposed) */
-        const uint8_t nv = (uint8_t) ((currentPreset.steppedParameters[spLFOTargets] & (mtOnlyA | mtOnlyB)) | mask);
-        if (currentPreset.steppedParameters[spLFOTargets] != nv) {
-            currentPreset.steppedParameters[spLFOTargets] = nv; changed = true;
+        uint8_t em = 0, hm = 0;
+        for (const auto& d : TGTS) {
+            if (currentPreset.steppedParameters[spLFOTargets] & d.bit) em |= (uint8_t) d.bit;
+            if (apvts.getRawParameterValue (d.id)->load() > 0.5f) hm |= (uint8_t) d.bit;
         }
+        engineBaseline[i] = (float) em;
+        hostShadow[i] = (float) hm;
+        ++i;
     }
     for (const auto& d : CHOICES) {
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (d.id))) {
-            const uint8_t nv = (uint8_t) p->getIndex();
-            if (currentPreset.steppedParameters[d.sp] != nv) {
-                currentPreset.steppedParameters[d.sp] = nv; changed = true;
+        engineBaseline[i] = (float) currentPreset.steppedParameters[d.sp];
+        if (auto* cp = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (d.id)))
+            hostShadow[i] = (float) cp->getIndex();
+        ++i;
+    }
+}
+
+void ElfPro800Processor::applyParamsToEngine()
+{
+    if (hostShadow.empty()) captureShadows();
+    bool changed = false;
+    auto raw = [&] (const char* id_) { return apvts.getRawParameterValue (id_)->load(); };
+    constexpr float EPS = 0.0011f;
+    size_t i = 0;
+
+    for (const auto& d : CONT) {
+        const float host = raw (d.id);
+        const float eng = currentPreset.continuousParameters[d.cp] / 65535.0f;
+        if (std::abs (host - hostShadow[i]) > EPS) {
+            hostShadow[i] = host;
+            if (std::abs (host - eng) > EPS) {
+                currentPreset.continuousParameters[d.cp] = (uint16_t) std::lround (host * 65535.0f);
+                changed = true;
             }
+            engineBaseline[i] = host;
+        } else if (std::abs (eng - engineBaseline[i]) > EPS) {
+            engineBaseline[i] = eng; /* a preset load moved the engine; follow it */
         }
+        ++i;
+    }
+    for (const auto& d : BOOLS) {
+        const float host = raw (d.id) > 0.5f ? 1.0f : 0.0f;
+        const float eng = currentPreset.steppedParameters[d.sp] ? 1.0f : 0.0f;
+        if (host != hostShadow[i]) {
+            hostShadow[i] = host;
+            if (host != eng) {
+                currentPreset.steppedParameters[d.sp] = host > 0.5f ? 1 : 0;
+                changed = true;
+            }
+            engineBaseline[i] = host;
+        } else if (eng != engineBaseline[i]) {
+            engineBaseline[i] = eng;
+        }
+        ++i;
+    }
+    {
+        uint8_t hostMask = 0;
+        for (const auto& d : TGTS) if (raw (d.id) > 0.5f) hostMask |= (uint8_t) d.bit;
+        const uint8_t engMask = (uint8_t) (currentPreset.steppedParameters[spLFOTargets] & (mtVCO | mtVCF | mtVCA | mtPW));
+        if ((float) hostMask != hostShadow[i]) {
+            hostShadow[i] = (float) hostMask;
+            if (hostMask != engMask) {
+                currentPreset.steppedParameters[spLFOTargets] =
+                    (uint8_t) ((currentPreset.steppedParameters[spLFOTargets] & (mtOnlyA | mtOnlyB)) | hostMask);
+                changed = true;
+            }
+            engineBaseline[i] = (float) hostMask;
+        } else if ((float) engMask != engineBaseline[i]) {
+            engineBaseline[i] = (float) engMask;
+        }
+        ++i;
+    }
+    for (const auto& d : CHOICES) {
+        auto* cp = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (d.id));
+        if (cp == nullptr) { ++i; continue; }
+        const float host = (float) cp->getIndex();
+        const float eng = (float) currentPreset.steppedParameters[d.sp];
+        if (host != hostShadow[i]) {
+            hostShadow[i] = host;
+            if (host != eng) {
+                currentPreset.steppedParameters[d.sp] = (uint8_t) host;
+                changed = true;
+            }
+            engineBaseline[i] = host;
+        } else if (eng != engineBaseline[i]) {
+            engineBaseline[i] = eng;
+        }
+        ++i;
     }
     if (changed) refreshFullState();
 
     /* arp/seq rate lives in settings (the preset copy is a display
        mirror); the engine clock takes it via clock_setSpeed. */
     {
-        const uint16_t rv = (uint16_t) std::lround (getF ("arpRate") * 65535.0f);
+        const uint16_t rv = (uint16_t) std::lround (raw ("arpRate") * 65535.0f);
         if (rv != arpRateApplied) {
             arpRateApplied = rv;
             settings.seqArpClock = rv;
@@ -145,7 +219,7 @@ void ElfPro800Processor::applyParamsToEngine()
     /* arpeggiator: not a preset parameter, applied directly */
     if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter ("arpMode"))) {
         const int mode = p->getIndex();
-        const int hold = getF ("arpHold") > 0.5f ? 1 : 0;
+        const int hold = raw ("arpHold") > 0.5f ? 1 : 0;
         if (mode != arpModeApplied || hold != arpHoldApplied) {
             arpModeApplied = mode; arpHoldApplied = hold;
             arp_setMode ((arpMode_t) mode, (int8_t) hold);
@@ -164,6 +238,44 @@ void ElfPro800Processor::syncParamsFromEngine()
     for (const auto& d : TGTS)
         setF (d.id, (currentPreset.steppedParameters[spLFOTargets] & d.bit) ? 1.0f : 0.0f);
     for (const auto& d : CHOICES) setF (d.id, (float) currentPreset.steppedParameters[d.sp]);
+    captureShadows();
+}
+
+void ElfPro800Processor::scanUserSlots()
+{
+    for (int i = 0; i < USER_SLOTS; ++i)
+        userEmpty[(size_t) i] = preset_checkPage ((uint16_t) i) == 0;
+}
+
+void ElfPro800Processor::loadProgram (int program)
+{
+    program = juce::jlimit (0, NUM_PROGRAMS - 1, program);
+    if (program < FACTORY_PROGRAMS) {
+        loadPreset (program);
+    } else {
+        const int slot = program - FACTORY_PROGRAMS;
+        /* On an empty/corrupt page the engine falls back to the default
+           preset inside loadCurrent - exactly the Init behaviour. */
+        preset_loadCurrent ((uint16_t) slot, 0);
+        refreshFullState();
+        presetIndex.store (program);
+        syncParamsFromEngine();
+    }
+    arpRateApplied = 0xffff; /* a stored page may carry its own speed mirror */
+}
+
+void ElfPro800Processor::requestProgram (int program) { presetRequest.store (program); }
+
+void ElfPro800Processor::requestSaveToCurrent()
+{
+    const int p = presetIndex.load();
+    if (p >= FACTORY_PROGRAMS) saveRequest.store (p - FACTORY_PROGRAMS);
+}
+
+bool ElfPro800Processor::programIsEmpty (int program) const
+{
+    if (program < FACTORY_PROGRAMS || program >= NUM_PROGRAMS) return false;
+    return userEmpty[(size_t) (program - FACTORY_PROGRAMS)];
 }
 
 void ElfPro800Processor::buildFactoryPresets()
@@ -178,7 +290,7 @@ void ElfPro800Processor::buildFactoryPresets()
     };
     mk ({}, {}); /* Init = engine default */
     mk ({ { cpCutoff, .55f }, { cpResonance, .18f }, { cpFilEnvAmt, .50f }, { cpFilAtt, .16f },
-          { cpFilDec, .38f }, { cpFilSus, .55f }, { cpFilRel, .30f }, { cpAmpAtt, .10f },
+          { cpFilDec, .38f }, { cpFilSus, .55f }, { cpFilRel, .30f }, { cpAmpAtt, .45f },
           { cpAmpDec, .30f }, { cpAmpSus, .85f }, { cpAmpRel, .32f }, { cpMixVolA, .45f }, { cpDrive, .55f } },
         { { spBSaw, 1 } }); /* Analog Brass */
     mk ({ { cpFreqB, .585f }, { cpCutoff, .72f }, { cpResonance, .30f }, { cpGlide, .22f },
@@ -240,6 +352,7 @@ void ElfPro800Processor::prepareToPlay (double sampleRate, int)
     basePreset = currentPreset;
     buildFactoryPresets();
     loadPreset (presetIndex.load());
+    scanUserSlots();
     arpModeApplied = -1; /* force arp application on first block */
     if (auto* p = apvts.getParameter ("arpRate"))
         p->setValueNotifyingHost (p->convertTo0to1 (settings.seqArpClock / 65535.0f));
@@ -253,20 +366,26 @@ bool ElfPro800Processor::isBusesLayoutSupported (const BusesLayout& layouts) con
         || layouts.getMainOutputChannelSet() == juce::AudioChannelSet::mono();
 }
 
-int ElfPro800Processor::getNumPrograms() { return FACTORY_COUNT; }
+int ElfPro800Processor::getNumPrograms() { return NUM_PROGRAMS; }
 int ElfPro800Processor::getCurrentProgram() { return presetIndex.load(); }
 void ElfPro800Processor::setCurrentProgram (int index) { presetRequest.store (index); }
 const juce::String ElfPro800Processor::getProgramName (int index)
 {
-    return FACTORY_NAMES[juce::jlimit (0, FACTORY_COUNT - 1, index)];
+    index = juce::jlimit (0, NUM_PROGRAMS - 1, index);
+    if (index < FACTORY_PROGRAMS) return FACTORY_NAMES[index];
+    return "User " + juce::String (index - FACTORY_PROGRAMS).paddedLeft ('0', 2);
 }
 void ElfPro800Processor::requestPresetDelta (int delta)
 {
-    presetRequest.store (juce::jlimit (0, FACTORY_COUNT - 1, presetIndex.load() + delta));
+    presetRequest.store (juce::jlimit (0, NUM_PROGRAMS - 1, presetIndex.load() + delta));
 }
 juce::String ElfPro800Processor::getPresetName() const
 {
-    return FACTORY_NAMES[juce::jlimit (0, FACTORY_COUNT - 1, presetIndex.load())];
+    const int p = presetIndex.load();
+    if (p < FACTORY_PROGRAMS) return FACTORY_NAMES[p];
+    juce::String n = "User " + juce::String (p - FACTORY_PROGRAMS).paddedLeft ('0', 2);
+    if (userEmpty[(size_t) (p - FACTORY_PROGRAMS)]) n += " (EMPTY)";
+    return n;
 }
 
 /* ------------------------------------------------------------------ */
@@ -310,8 +429,16 @@ void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 {
     juce::ScopedNoDenormals noDenormals;
     const int req = presetRequest.exchange (-1);
-    if (req >= 0) loadPreset (req);
+    if (req >= 0) loadProgram (req);
     applyParamsToEngine();
+    {
+        const int sv = saveRequest.exchange (-1);
+        if (sv >= 0 && sv < USER_SLOTS) {
+            preset_saveCurrent ((uint16_t) sv);
+            userEmpty[(size_t) sv] = false;
+            saveFlash.fetch_add (1);
+        }
+    }
 
     const int numSamples = buffer.getNumSamples();
     auto* outL = buffer.getWritePointer (0);
@@ -423,6 +550,13 @@ void ElfPro800Processor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty ("presetIndex", presetIndex.load(), nullptr);
+    /* Persist the 100 user preset pages (the first 25,600 bytes of the
+       engine's EEPROM image) with the session. Settings and sequencer
+       pages are deliberately NOT included. */
+    juce::MemoryBlock pages ((size_t) USER_SLOTS * 256);
+    for (int i = 0; i < USER_SLOTS; ++i)
+        storage_read ((uint32_t) i, (uint8_t*) pages.getData() + (size_t) i * 256);
+    state.setProperty ("userPages", juce::var (pages), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, destData);
 }
 void ElfPro800Processor::setStateInformation (const void* data, int sizeInBytes)
@@ -431,8 +565,14 @@ void ElfPro800Processor::setStateInformation (const void* data, int sizeInBytes)
         if (xml->hasTagName (apvts.state.getType())) {
             auto tree = juce::ValueTree::fromXml (*xml);
             apvts.replaceState (tree);
+            if (auto* mb = tree.getProperty ("userPages").getBinaryData()) {
+                if (mb->getSize() == (size_t) USER_SLOTS * 256) {
+                    for (int i = 0; i < USER_SLOTS; ++i)
+                        storage_write ((uint32_t) i, (uint8_t*) mb->getData() + (size_t) i * 256);
+                    scanUserSlots();
+                }
+            }
             presetRequest.store ((int) tree.getProperty ("presetIndex", 0));
-            paramsDirty.store (true);
         }
 }
 

@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "../source/PluginProcessor.h"
+#include "../source/PluginEditor.h"
 extern "C" {
 #include "storage.h"
 #include "arp.h"
@@ -40,6 +41,7 @@ static double blockRMS (juce::MidiBuffer& midi)
 static void setParam (const char* id, float v01)
 {
     auto* p = P->apvts.getParameter (id);
+    if (p == nullptr) { std::printf ("FAIL: unknown param id %s\n", id); std::exit (1); }
     p->setValueNotifyingHost (p->convertTo0to1 (v01));
 }
 static void setChoice (const char* id, int index)
@@ -292,6 +294,62 @@ int main()
     setParam ("arpRate", 0.3f); runBlock (midi);
     CHECK (settings.seqArpClock == (uint16_t) std::lround (0.3f * 65535.0f), "arp rate -> settings.seqArpClock");
 
-    std::printf ("HARNESS PASS\\n");
+    /* 13. editor alive: attachments don't fight preset loads */
+    std::printf ("== 13. editor alive: preset switching ==\n");
+    {
+        auto* ed = P->createEditor();
+        CHECK (ed != nullptr, "editor created");
+        ed->setSize (1160, 648);
+        P->requestPresetDelta (1); /* the LCD next button's exact call */
+        runBlock (midi); runBlock (midi);
+        CHECK (P->getPresetIndex() == 1, "editor-alive delta -> Brass");
+        CHECK (std::abs ((int) currentPreset.continuousParameters[cpCutoff] - (int) std::lround (0.55 * 65535.0)) <= 30, "editor-alive Brass cutoff in engine");
+        P->requestPresetDelta (1);
+        runBlock (midi); runBlock (midi);
+        CHECK (P->getPresetIndex() == 2, "editor-alive delta -> Sync Lead");
+        CHECK (currentPreset.steppedParameters[spSync] == 1, "editor-alive Sync Lead sync on");
+        delete ed;
+    }
+
+    /* 12. user slots: save / scramble / load / session persistence */
+    std::printf ("== 12. user preset slots ==\n");
+    CHECK (P->getNumPrograms() == 106, "106 programs");
+    P->setCurrentProgram (13); /* user slot 7 */
+    runBlock (midi); runBlock (midi);
+    CHECK (P->getPresetIndex() == 13, "user program active");
+    CHECK (P->programIsEmpty (13), "slot 7 starts empty");
+    setParam ("cutoff", 0.31f);
+    setParam ("resonance", 0.77f);
+    runBlock (midi); runBlock (midi);
+    const int savedCut = currentPreset.continuousParameters[cpCutoff];
+    const int savedRes = currentPreset.continuousParameters[cpResonance];
+    P->requestSaveToCurrent();
+    runBlock (midi); runBlock (midi);
+    CHECK (! P->programIsEmpty (13), "slot 7 written by save");
+    CHECK (P->getSaveFlash() >= 1, "save flash counted");
+    setParam ("cutoff", 0.92f);
+    runBlock (midi); runBlock (midi);
+    CHECK (std::abs ((int) currentPreset.continuousParameters[cpCutoff] - savedCut) > 30, "scramble moved cutoff");
+    P->setCurrentProgram (13);
+    runBlock (midi); runBlock (midi);
+    CHECK (std::abs ((int) currentPreset.continuousParameters[cpCutoff] - savedCut) <= 30, "slot load restores cutoff");
+    CHECK (std::abs ((int) currentPreset.continuousParameters[cpResonance] - savedRes) <= 30, "slot load restores resonance");
+    {
+        juce::MemoryBlock blob;
+        P->getStateInformation (blob);
+        ElfPro800Processor proc2;
+        proc2.setStateInformation (blob.getData(), (int) blob.getSize());
+        proc2.prepareToPlay (SR, BLOCK);
+        proc2.setCurrentProgram (13);
+        juce::AudioBuffer<float> b2 (2, BLOCK); b2.clear();
+        juce::MidiBuffer m2;
+        proc2.processBlock (b2, m2);
+        proc2.processBlock (b2, m2);
+        CHECK (! proc2.programIsEmpty (13), "restored instance sees slot 7");
+        CHECK (std::abs ((int) currentPreset.continuousParameters[cpCutoff] - savedCut) <= 30, "restored instance loads saved cutoff");
+        proc2.releaseResources();
+    }
+
+    std::printf ("HARNESS PASS\n");
     return 0;
 }

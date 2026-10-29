@@ -59,6 +59,8 @@ private:
     Knob* kArpRate {};
 
     juce::TextButton prevBtn { "<" }, nextBtn { ">" };
+    juce::TextButton factoryBtn { "FACTORY" }, userBtn { "USER" }, saveBtn { "SAVE" };
+    int paintedSaveFlash = 0, lcdFlashTicks = 0;
     juce::Label lcdNum, lcdName;
     int paintedPreset = -1;
     std::array<float, 8> ledLevel {};

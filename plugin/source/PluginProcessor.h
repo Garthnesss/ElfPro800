@@ -44,10 +44,20 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    /* UI-facing state */
+    /* UI-facing state. Programs: 0..5 factory, 6..105 = user slots
+       0..99 in the engine's own storage (pages 0..99 of the EEPROM
+       image; sequencer pages start at 200 and are never touched). */
+    static constexpr int FACTORY_PROGRAMS = 6;
+    static constexpr int USER_SLOTS = 100;
+    static constexpr int NUM_PROGRAMS = FACTORY_PROGRAMS + USER_SLOTS;
     void requestPresetDelta (int delta);
+    void requestProgram (int program);
     int getPresetIndex() const { return presetIndex.load(); }
     juce::String getPresetName() const;
+    bool programIsEmpty (int program) const;
+    bool canSave() const { return presetIndex.load() >= FACTORY_PROGRAMS; }
+    void requestSaveToCurrent();
+    int getSaveFlash() const { return saveFlash.load(); }
     float getVoiceLevel (int v) const { return voiceLevel[(size_t) v].load(); }
     int getArpMode() const { return arpModeApplied; }
 
@@ -58,8 +68,8 @@ public:
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout makeLayout();
     void applyParamsToEngine();
-    void syncParamsFromEngine();
-    void loadPreset (int index);
+    void syncParamsFromEngine(); /* pushes engine -> APVTS, then captureShadows() */
+    void loadPreset (int index); /* kept: factory-only path */
     void buildFactoryPresets();
 
     p8_core_t core {};
@@ -73,18 +83,29 @@ private:
     struct DVoice { double phA = 0.0, phB = 0.0, ic1 = 0.0, ic2 = 0.0; };
     std::array<DVoice, 8> dvoices {};
 
-    /* parameter bookkeeping: last values pushed to the engine (denormalised
-       per parameter kind), to avoid refreshFullState() churn */
-    std::vector<float> lastApplied;
-    std::atomic<bool> paramsDirty { true };
+    /* Parameter authority bookkeeping. Two shadows per registered
+       parameter: hostShadow = the value the host last presented (or
+       that we last pushed and captured), engineBaseline = the engine's
+       value at the last reconciliation. A host value only overrides a
+       loaded preset when it CHANGES away from hostShadow; a preset
+       load moves the baseline and the shadow together, so a stale host
+       echo can never stomp a fresh preset (Garth's Live test). */
+    std::vector<float> hostShadow;
+    std::vector<float> engineBaseline;
+    void captureShadows();
 
     /* presets */
     struct preset_s basePreset {};
     std::vector<struct preset_s> factory;
     std::vector<juce::String> factoryNames;
     std::atomic<int> presetIndex { 0 };
-    std::atomic<int> presetRequest { -1 }; /* -1 none, else absolute index */
+    std::atomic<int> presetRequest { -1 }; /* -1 none, else absolute program */
     bool presetsBuilt = false;
+    std::array<bool, USER_SLOTS> userEmpty {};
+    std::atomic<int> saveRequest { -1 };
+    std::atomic<int> saveFlash { 0 };
+    void scanUserSlots();
+    void loadProgram (int program);
 
     int arpModeApplied = -1, arpHoldApplied = -1;
     uint16_t arpRateApplied = 0xffff;

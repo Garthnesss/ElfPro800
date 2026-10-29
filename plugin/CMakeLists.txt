@@ -26,6 +26,7 @@ if(APPLE)
 endif()
 
 juce_add_plugin(ElfPro800
+  VERSION 1.1.0
   COMPANY_NAME            "Garth Elfstrom"
   BUNDLE_ID               com.garthelfstrom.elfpro800
   PLUGIN_MANUFACTURER_CODE Elfc

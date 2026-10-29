@@ -51,6 +51,14 @@ ElfPro800Editor::ElfPro800Editor (ElfPro800Processor& p) : AudioProcessorEditor 
         b->setColour (juce::TextButton::textColourOffId, CREAM);
         addAndMakeVisible (*b);
     }
+    factoryBtn.onClick = [this] { proc.requestProgram (0); };
+    userBtn.onClick = [this] { proc.requestProgram (ElfPro800Processor::FACTORY_PROGRAMS); };
+    saveBtn.onClick = [this] { proc.requestSaveToCurrent(); };
+    for (auto* b : { &factoryBtn, &userBtn, &saveBtn }) {
+        b->setColour (juce::TextButton::buttonColourId, juce::Colour (0xff23262c));
+        b->setColour (juce::TextButton::textColourOffId, CREAM);
+        addAndMakeVisible (*b);
+    }
     lcdNum.setFont (juce::Font (juce::FontOptions ("Courier New", 26.0f, juce::Font::bold)));
     lcdNum.setColour (juce::Label::textColourId, LCDGREEN);
     addAndMakeVisible (lcdNum);
@@ -258,6 +266,13 @@ void ElfPro800Editor::resized()
     layoutToggleRow (sinner.removeFromLeft (90), { tArpHold });
     sinner.removeFromLeft (10);
     layoutKnobRow (sinner.removeFromLeft (90), { kArpRate }, 34);
+    /* footer buttons (preset banks + save) */
+    auto footer = getLocalBounds().removeFromBottom (26).withTrimmedRight (14);
+    saveBtn.setBounds (footer.removeFromRight (64).withSizeKeepingCentre (60, 20));
+    footer.removeFromRight (6);
+    userBtn.setBounds (footer.removeFromRight (64).withSizeKeepingCentre (60, 20));
+    footer.removeFromRight (6);
+    factoryBtn.setBounds (footer.removeFromRight (76).withSizeKeepingCentre (72, 20));
 }
 
 void ElfPro800Editor::paint (juce::Graphics& g)
@@ -309,8 +324,7 @@ void ElfPro800Editor::paint (juce::Graphics& g)
     /* footer */
     g.setColour (juce::Colour (0xff63615a));
     g.setFont (juce::Font (juce::FontOptions (9.0f)));
-    g.drawText ("ELFPRO800 · V1 PANEL", 16, getHeight() - 20, 300, 12, juce::Justification::centredLeft);
-    g.drawText ("GPL-3.0 · P600 ENGINE", getLocalBounds().reduced (16).toFloat().withTrimmedTop (getHeight() - 36), juce::Justification::bottomRight);
+    g.drawText ("ELFPRO800 · V1 PANEL · GPL-3.0 · P600 ENGINE", 16, getHeight() - 20, 400, 12, juce::Justification::centredLeft);
 }
 
 void ElfPro800Editor::timerCallback()
@@ -324,6 +338,17 @@ void ElfPro800Editor::timerCallback()
         paintedPreset = pi;
         lcdNum.setText (juce::String::formatted ("%03d", pi + 1), juce::dontSendNotification);
         lcdName.setText (proc.getPresetName(), juce::dontSendNotification);
+    }
+    /* save affordance + flash */
+    saveBtn.setEnabled (proc.canSave());
+    saveBtn.setColour (juce::TextButton::textColourOffId, proc.canSave() ? ORANGE : DIM);
+    const int sf = proc.getSaveFlash();
+    if (sf != paintedSaveFlash) { paintedSaveFlash = sf; lcdFlashTicks = 10; }
+    if (lcdFlashTicks > 0) {
+        --lcdFlashTicks;
+        lcdName.setColour (juce::Label::textColourId, juce::Colour (0xffffb27a));
+    } else {
+        lcdName.setColour (juce::Label::textColourId, juce::Colour (0xffb8ffd2));
     }
     for (auto& s : segs) refreshSeg (*s);
     for (auto& t : toggles) {
