@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: cmake -B build -S .
       - run: cmake --build build
-      - run: ctest --test-dir build --output-on-failure
+      - run: ctest --test-dir build -C Debug --output-on-failure # -C: VS multi-config puts exes in Debug/; ignored by single-config generators
   arm:
     runs-on: ubuntu-latest
     steps:
