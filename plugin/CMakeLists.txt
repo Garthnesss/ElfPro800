@@ -59,3 +59,16 @@ target_link_libraries(ElfPro800 PRIVATE
   # was OOM-killed on the 8 GB dev VM (2026-10-28) and slows CI; a
   # scaffold does not need it. Revisit for release builds.
   juce::juce_recommended_warning_flags)
+
+# Headless harness: exercises the processor + full parameter wiring in CI.
+juce_add_console_app(ElfPro800Harness PRODUCT_NAME "ElfPro800Harness")
+juce_generate_juce_header(ElfPro800Harness)
+target_sources(ElfPro800Harness PRIVATE
+  source/PluginProcessor.cpp
+  source/PluginEditor.cpp
+  test/Harness.cpp)
+target_compile_definitions(ElfPro800Harness PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_link_libraries(ElfPro800Harness PRIVATE
+  p8core juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)
+enable_testing()
+add_test(NAME harness COMMAND ElfPro800Harness)

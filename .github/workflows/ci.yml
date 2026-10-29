@@ -35,3 +35,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libfreetype-dev libfontconfig1-dev libgl1-mesa-dev
       - run: cmake -B build-plugin -S plugin -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build-plugin --config Release
+      - run: ctest --test-dir build-plugin -C Release --output-on-failure
