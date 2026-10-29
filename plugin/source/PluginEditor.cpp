@@ -40,6 +40,7 @@ ElfPro800Editor::ElfPro800Editor (ElfPro800Processor& p) : AudioProcessorEditor 
     tUnison = &addToggle ("unison", "UNISON");
 
     segArpMode = &addSeg ("arpMode", { "OFF", "UP/DOWN", "RANDOM", "ASSIGN" });
+    kArpRate = &addKnob ("arpRate", "RATE");
     tArpHold = &addToggle ("arpHold", "HOLD");
     kVolume = &addKnob ("volume", "VOLUME");
 
@@ -255,6 +256,8 @@ void ElfPro800Editor::resized()
     layoutSegRow (sinner.removeFromLeft (430), *segArpMode);
     sinner.removeFromLeft (10);
     layoutToggleRow (sinner.removeFromLeft (90), { tArpHold });
+    sinner.removeFromLeft (10);
+    layoutKnobRow (sinner.removeFromLeft (90), { kArpRate }, 34);
 }
 
 void ElfPro800Editor::paint (juce::Graphics& g)

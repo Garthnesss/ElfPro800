@@ -56,6 +56,7 @@ private:
            *tPmodFA{}, *tPmodFil{}, *tUnison{},
            *tLfoPitch{}, *tLfoFilter{}, *tLfoAmp{}, *tLfoPW{}, *tArpHold{};
     Seg *segLfoShape{}, *segTracking{}, *segArpMode{};
+    Knob* kArpRate {};
 
     juce::TextButton prevBtn { "<" }, nextBtn { ">" };
     juce::Label lcdNum, lcdName;

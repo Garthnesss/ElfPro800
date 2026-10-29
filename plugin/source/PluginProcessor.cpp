@@ -6,6 +6,7 @@
 extern "C" {
 #include "engine_bridge.h" /* refreshFullState */
 #include "arp.h"           /* arp_setMode, arpMode_t */
+#include "clock.h"         /* clock_setSpeed */
 #include "synth.h"         /* mt* LFO target bits, mixer_updatePanelLayout */
 }
 
@@ -84,6 +85,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout ElfPro800Processor::makeLayo
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID { "arpHold", 1 }, "Arpeggiator Hold", false));
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "arpRate", 1 }, "Arpeggiator Rate",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.5f));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { "volume", 1 }, "Volume",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.8f));
     return { params.begin(), params.end() };
@@ -125,6 +129,18 @@ void ElfPro800Processor::applyParamsToEngine()
         }
     }
     if (changed) refreshFullState();
+
+    /* arp/seq rate lives in settings (the preset copy is a display
+       mirror); the engine clock takes it via clock_setSpeed. */
+    {
+        const uint16_t rv = (uint16_t) std::lround (getF ("arpRate") * 65535.0f);
+        if (rv != arpRateApplied) {
+            arpRateApplied = rv;
+            settings.seqArpClock = rv;
+            currentPreset.continuousParameters[cpSeqArpClock] = rv;
+            clock_setSpeed (rv);
+        }
+    }
 
     /* arpeggiator: not a preset parameter, applied directly */
     if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter ("arpMode"))) {
@@ -197,8 +213,7 @@ void ElfPro800Processor::prepareToPlay (double sampleRate, int)
 {
     sr = sampleRate;
     samplesPerTick = juce::jmax (1, (int) std::lround (sr / 2000.0));
-    numVoices = 0;
-    for (auto& v : voices) v = Voice {};
+    for (auto& v : dvoices) v = DVoice {};
     p8_core_init (&core);
     preset_loadDefault (1);
     /* SCI panel layout: oscillator levels are derived from the Mix and
@@ -212,6 +227,9 @@ void ElfPro800Processor::prepareToPlay (double sampleRate, int)
     buildFactoryPresets();
     loadPreset (presetIndex.load());
     arpModeApplied = -1; /* force arp application on first block */
+    if (auto* p = apvts.getParameter ("arpRate"))
+        p->setValueNotifyingHost (p->convertTo0to1 (settings.seqArpClock / 65535.0f));
+    arpRateApplied = 0xffff;
     /* Boot guard (V0 finding): notes gated during the engine's post-init
        preset load are dropped; run 200 silent ticks before going live. */
     p8_inputs_t in {}; p8_cv_frame_t f {};
@@ -242,6 +260,43 @@ juce::String ElfPro800Processor::getPresetName() const
     return FACTORY_NAMES[juce::jlimit (0, FACTORY_COUNT - 1, presetIndex.load())];
 }
 
+/* ------------------------------------------------------------------ */
+/* CV-driven voice renderer. The engine's CV frame is the single source
+ * of truth, exactly as the DACs drive the hardware VCOs/VCF:
+ *   pitch  <- osc_a/osc_b CVs (6148 units per octave, A440 = 21649,
+ *             measured on the core 2026-10-28; knob offsets, glide,
+ *             LFO, poly-mod, detune and tuner wiggles all ride the CV)
+ *   waves  <- stepped params (saw/tri gates are frame bits; pulse uses
+ *             the pw CVs, which the engine parks when square is off)
+ *   levels <- vol_a/vol_b CVs (the Mix/Drive law is already applied)
+ *   filter <- per-voice fil CV -> Hz (exponential fit), res CV -> Q
+ *   amp    <- per-voice amp CV (the full envelope)
+ * Oscillators are PolyBLEP (saw/pulse); the filter is a TPT SVF
+ * (Zavalishin - unconditionally stable, see the Chamberlin lesson).   */
+/* ------------------------------------------------------------------ */
+namespace {
+inline double freqFromCV (uint16_t cv)
+{
+    return juce::jlimit (8.0, 19000.0, 440.0 * std::pow (2.0, ((double) cv - 21649.0) / 6148.0));
+}
+inline double polyblep (double t, double dt)
+{
+    if (t < dt) { const double x = t / dt; return x + x - x * x - 1.0; }
+    if (t > 1.0 - dt) { const double x = (t - 1.0) / dt; return x * x + x + x + 1.0; }
+    return 0.0;
+}
+inline double waveSaw (double ph, double dt) { return 2.0 * ph - 1.0 - polyblep (ph, dt); }
+inline double waveTri (double ph) { return ph < 0.5 ? 4.0 * ph - 1.0 : 3.0 - 4.0 * ph; }
+inline double wavePulse (double ph, double dt, double duty)
+{
+    double y = ph < duty ? 1.0 : -1.0;
+    y += polyblep (ph, dt);
+    double t2 = ph - duty; if (t2 < 0.0) t2 += 1.0;
+    y -= polyblep (t2, dt);
+    return y;
+}
+} // namespace
+
 void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -253,6 +308,18 @@ void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     auto* outL = buffer.getWritePointer (0);
     auto* outR = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
     const float volume = apvts.getRawParameterValue ("volume")->load();
+
+    const bool sawA = currentPreset.steppedParameters[spASaw] != 0;
+    const bool triA = currentPreset.steppedParameters[spATri] != 0;
+    const bool sqrA = currentPreset.steppedParameters[spASqr] != 0;
+    const bool sawB = currentPreset.steppedParameters[spBSaw] != 0;
+    const bool triB = currentPreset.steppedParameters[spBTri] != 0;
+    const bool sqrB = currentPreset.steppedParameters[spBSqr] != 0;
+    const bool syncOn = currentPreset.steppedParameters[spSync] != 0;
+    const int wavesA = (sawA ? 1 : 0) + (triA ? 1 : 0) + (sqrA ? 1 : 0);
+    const int wavesB = (sawB ? 1 : 0) + (triB ? 1 : 0) + (sqrB ? 1 : 0);
+    const double gainA = wavesA ? 0.62 / wavesA : 0.0;
+    const double gainB = wavesB ? 0.62 / wavesB : 0.0;
 
     struct Ev { int tick; uint8_t bytes[3]; int len; };
     std::array<Ev, 256> evs; int numEvs = 0;
@@ -274,43 +341,65 @@ void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         uint8_t chunk[3 * 64]; uint16_t n = 0;
         while (evIdx < numEvs && evs[(size_t) evIdx].tick <= tick) {
             const Ev& e = evs[(size_t) evIdx++];
-            const uint8_t st = e.bytes[0] & 0xf0, note = e.len > 1 ? e.bytes[1] : 0, vel = e.len > 2 ? e.bytes[2] : 0;
-            if (st == 0x90 && vel) {
-                if (numVoices < (int) voices.size()) {
-                    voices[(size_t) numVoices].note = note;
-                    voices[(size_t) numVoices].phase = 0.0;
-                    voices[(size_t) numVoices].lp = 0.0;
-                    ++numVoices;
-                }
-            } else if (st == 0x80 || (st == 0x90 && !vel)) {
-                for (int k = 0; k < numVoices; ++k)
-                    if (voices[(size_t) k].note == note) {
-                        for (int m = k; m + 1 < numVoices; ++m) voices[(size_t) m] = voices[(size_t) (m + 1)];
-                        --numVoices; break;
-                    }
-            }
             if (n + e.len <= sizeof (chunk)) { std::memcpy (chunk + n, e.bytes, (size_t) e.len); n = (uint16_t) (n + e.len); }
         }
         if (n) { in.midi_in = chunk; in.midi_in_len = n; }
         p8_core_tick (&core, &in, &frame);
 
+        /* per-tick (CV-rate) DSP coefficients */
+        const double resN = frame.res / 65535.0;
+        const double kk = juce::jmax (0.05, 2.0 * (1.0 - resN * 0.99));
+        const double dutyA = juce::jlimit (0.03, 0.97, frame.pw_a / 65535.0);
+        const double dutyB = juce::jlimit (0.03, 0.97, frame.pw_b / 65535.0);
+        const double lvlA = frame.vol_a / 65535.0, lvlB = frame.vol_b / 65535.0;
+        double incA[8], incB[8], a1[8], a2[8], a3[8];
+        for (int v = 0; v < 8; ++v) {
+            incA[v] = freqFromCV (frame.osc_a[v]) / sr;
+            incB[v] = freqFromCV (frame.osc_b[v]) / sr;
+            const double x = frame.fil[v] / 65535.0;
+            const double fc = juce::jlimit (40.0, 17500.0, 40.0 + 20000.0 * std::pow (x, 2.5));
+            const double g = std::tan (juce::MathConstants<double>::pi * fc / sr);
+            a1[v] = 1.0 / (1.0 + g * (g + kk));
+            a2[v] = g * a1[v];
+            a3[v] = g * a2[v];
+        }
+
         const int start = tick * samplesPerTick;
         const int end = juce::jmin (numSamples, start + samplesPerTick);
         for (int s = start; s < end; ++s) {
             double mix = 0.0;
-            for (int v = 0; v < numVoices; ++v) {
-                Voice& vc = voices[(size_t) v];
-                const double freq = 440.0 * std::pow (2.0, (vc.note - 69) / 12.0);
-                vc.phase += freq / sr;
-                if (vc.phase >= 1.0) vc.phase -= 1.0;
-                const double saw = 2.0 * vc.phase - 1.0;
-                const double amp = v < 8 ? frame.amp[v] / 65535.0 : 0.0;
-                const double cut = v < 8 ? frame.fil[v] / 65535.0 : 0.5;
-                const double a = 0.02 + 0.9 * cut * cut;
-                vc.lp += a * (saw - vc.lp);
-                mix += vc.lp * amp;
+            for (int v = 0; v < 8; ++v) {
+                DVoice& dv = dvoices[(size_t) v];
+                const double amp = frame.amp[v] / 65535.0;
+                double osc = 0.0;
+                if (wavesA) {
+                    double w = 0.0;
+                    if (sawA) w += waveSaw (dv.phA, incA[v]);
+                    if (triA) w += waveTri (dv.phA);
+                    if (sqrA) w += wavePulse (dv.phA, incA[v], dutyA);
+                    osc += w * gainA * lvlA;
+                }
+                if (wavesB) {
+                    double w = 0.0;
+                    if (sawB) w += waveSaw (dv.phB, incB[v]);
+                    if (triB) w += waveTri (dv.phB);
+                    if (sqrB) w += wavePulse (dv.phB, incB[v], dutyB);
+                    osc += w * gainB * lvlB;
+                }
+                dv.phA += incA[v];
+                if (dv.phA >= 1.0) { dv.phA -= 1.0; if (syncOn) dv.phB = 0.0; }
+                dv.phB += incB[v];
+                if (dv.phB >= 1.0) dv.phB -= 1.0;
+                /* TPT SVF lowpass */
+                const double v3 = osc - dv.ic2;
+                const double v1 = a1[v] * dv.ic1 + a2[v] * v3;
+                const double v2 = dv.ic2 + a2[v] * dv.ic1 + a3[v] * v3;
+                dv.ic1 = 2.0 * v1 - dv.ic1;
+                dv.ic2 = 2.0 * v2 - dv.ic2;
+                mix += v2 * amp;
             }
-            const float out = (float) juce::jlimit (-1.0, 1.0, mix * 0.11 * volume * 1.4);
+            const double soft = mix * 0.9;
+            const float out = (float) (volume * (soft / (1.0 + std::abs (soft))));
             outL[s] = out;
             if (outR) outR[s] = out;
         }

@@ -12,6 +12,7 @@ extern "C" {
 #include "storage.h"
 #include "arp.h"
 #include "synth.h" /* mixer_volumeFromMixAndDrive */
+#include <vector>
 }
 
 static ElfPro800Processor* P = nullptr;
@@ -166,6 +167,118 @@ int main()
     proc.setCurrentProgram (0);
     runBlock (midi);
 
-    std::printf ("HARNESS PASS\n");
+
+    /* ================= section 11: audio-path proof =================
+       The v1 harness proved parameters reach the engine; these render
+       audio and prove the major controls are AUDIBLE in the output of
+       the CV-driven renderer (Garth's Live-test feedback, 2026-10-28). */
+    auto renderHeld = [&] (int captureBlocks) {
+        std::vector<float> out;
+        juce::MidiBuffer m;
+        for (int i = 0; i < 25; ++i) blockRMS (m); /* settle attack */
+        for (int i = 0; i < captureBlocks; ++i) {
+            juce::AudioBuffer<float> buf (2, BLOCK);
+            buf.clear();
+            juce::MidiBuffer m2;
+            P->processBlock (buf, m2);
+            out.insert (out.end(), buf.getReadPointer (0), buf.getReadPointer (0) + BLOCK);
+        }
+        return out;
+    };
+    struct M { double rms, bright, zcr; };
+    auto measure = [&] (const std::vector<float>& x) {
+        M m { 0, 0, 0 };
+        double s = 0, d = 0; long cross = 0;
+        for (size_t i = 0; i < x.size(); ++i) {
+            s += (double) x[i] * x[i];
+            if (i) { const double df = x[i] - x[i - 1]; d += df * df; }
+            if (i && ((x[i - 1] < 0) != (x[i] < 0))) ++cross;
+        }
+        m.rms = std::sqrt (s / (double) x.size());
+        m.bright = m.rms > 1e-6 ? std::sqrt (d / (double) x.size()) / m.rms : 0.0;
+        m.zcr = cross * SR / (double) x.size();
+        return m;
+    };
+    auto resetPanel = [&] {
+        proc.setCurrentProgram (0);
+        juce::MidiBuffer m; runBlock (m);
+        setParam ("drive", 0.0f); setParam ("mix", 0.0f); /* engine default mix law inputs */
+        runBlock (m);
+        /* default preset: mix=1.0 (all A) drive=0 in cp terms; restore audible A level via drive */
+        setParam ("mix", 0.0f); setParam ("drive", 0.75f); runBlock (m);
+    };
+
+    resetPanel();
+    noteOn (midi, 60);
+    auto base = measure (renderHeld (60));
+    std::printf ("base: rms %.4f bright %.3f zcr %.1f\n", base.rms, base.bright, base.zcr);
+    CHECK (base.rms > 0.02, "renderer base sound");
+
+    /* pitch: freqA +0.25 of knob = +12 semitones (probe calibration) */
+    setParam ("freqA", 0.25f); runBlock (midi);
+    auto up = measure (renderHeld (60));
+    std::printf ("freqA+12st: zcr %.1f (ratio %.2f)\n", up.zcr, up.zcr / base.zcr);
+    CHECK (up.zcr / base.zcr > 1.65 && up.zcr / base.zcr < 2.4, "freqA knob transposes +12st");
+    setParam ("freqA", 0.0f); runBlock (midi);
+
+    /* waveform: triangle is much darker than saw */
+    setParam ("aSaw", 0.0f); setParam ("aTri", 1.0f); runBlock (midi);
+    auto tri = measure (renderHeld (60));
+    std::printf ("tri: bright %.3f vs saw %.3f\n", tri.bright, base.bright);
+    CHECK (tri.bright < base.bright * 0.65, "triangle darker than saw");
+    setParam ("aTri", 0.0f); setParam ("aSqr", 1.0f); runBlock (midi);
+
+    /* pulse width: narrow pulse sounds different from 50% */
+    setParam ("pwA", 0.5f); runBlock (midi);
+    auto pw50 = measure (renderHeld (60));
+    setParam ("pwA", 0.13f); runBlock (midi);
+    auto pw13 = measure (renderHeld (60));
+    std::printf ("pw50 bright %.3f pw13 bright %.3f rms %.4f/%.4f\n", pw50.bright, pw13.bright, pw50.rms, pw13.rms);
+    CHECK (pw13.bright > pw50.bright * 1.2, "narrow pulse brighter");
+    setParam ("aSqr", 0.0f); setParam ("aSaw", 1.0f); setParam ("pwA", 0.5f); runBlock (midi);
+
+    /* osc B alone, +12 st via freqB */
+    setParam ("mix", 1.0f); setParam ("bSaw", 1.0f); setParam ("freqB", 0.25f); runBlock (midi);
+    auto bOnly = measure (renderHeld (60));
+    std::printf ("oscB+12st: zcr %.1f (ratio %.2f)\n", bOnly.zcr, bOnly.zcr / base.zcr);
+    CHECK (bOnly.zcr / base.zcr > 1.6 && bOnly.zcr / base.zcr < 2.45, "osc B path + transpose");
+    resetPanel(); runBlock (midi);
+
+    /* resonance: audible peak at fixed cutoff */
+    setParam ("cutoff", 0.45f); setParam ("resonance", 0.05f); runBlock (midi);
+    auto resLo = measure (renderHeld (60));
+    setParam ("resonance", 0.95f); runBlock (midi);
+    auto resHi = measure (renderHeld (60));
+    std::printf ("res: rms %.4f -> %.4f, bright %.3f -> %.3f\n", resLo.rms, resHi.rms, resLo.bright, resHi.bright);
+    CHECK (resHi.rms > resLo.rms * 1.08 && resHi.bright > resLo.bright * 1.1, "resonance peaks audibly");
+    resetPanel(); runBlock (midi);
+
+    /* LFO -> pitch: windowed pitch wobbles */
+    auto wobble = [&] (const std::vector<float>& x) {
+        const int W = 8; const size_t wlen = x.size() / W;
+        double mean = 0, z[8];
+        for (int w = 0; w < W; ++w) {
+            long c = 0;
+            for (size_t i = (size_t) w * wlen + 1; i < (size_t) (w + 1) * wlen; ++i)
+                if ((x[i - 1] < 0) != (x[i] < 0)) ++c;
+            z[w] = c * SR / (double) wlen; mean += z[w] / W;
+        }
+        double var = 0; for (int w = 0; w < W; ++w) var += (z[w] - mean) * (z[w] - mean) / W;
+        return mean > 0 ? std::sqrt (var) / mean : 0.0;
+    };
+    setParam ("lfoAmt", 0.85f); setParam ("lfoFreq", 0.30f);
+    setParam ("lfoTgtPitch", 1.0f); setChoice ("lfoShape", 1); runBlock (midi);
+    auto wob = wobble (renderHeld (150));
+    setParam ("lfoAmt", 0.0f); runBlock (midi);
+    auto steady = wobble (renderHeld (150));
+    std::printf ("lfo wobble %.3f vs steady %.3f\n", wob, steady);
+    CHECK (wob > steady * 2.5 && wob > 0.05, "LFO modulates pitch audibly");
+    noteOff (midi, 60); runBlock (midi);
+
+    /* arp rate lands in settings */
+    setParam ("arpRate", 0.3f); runBlock (midi);
+    CHECK (settings.seqArpClock == (uint16_t) std::lround (0.3f * 65535.0f), "arp rate -> settings.seqArpClock");
+
+    std::printf ("HARNESS PASS\\n");
     return 0;
 }

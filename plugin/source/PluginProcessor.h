@@ -67,9 +67,11 @@ private:
     double sr = 48000.0;
     int samplesPerTick = 24;
 
-    struct Voice { int note = -1; double phase = 0.0, lp = 0.0; };
-    std::array<Voice, 16> voices {};
-    int numVoices = 0;
+    /* CV-driven voice DSP state (one per engine voice). Pitch, pulse
+       width, levels and filter cutoff all come from the engine's CV
+       frame each tick - the DSP keeps only oscillator/filter state. */
+    struct DVoice { double phA = 0.0, phB = 0.0, ic1 = 0.0, ic2 = 0.0; };
+    std::array<DVoice, 8> dvoices {};
 
     /* parameter bookkeeping: last values pushed to the engine (denormalised
        per parameter kind), to avoid refreshFullState() churn */
@@ -85,6 +87,7 @@ private:
     bool presetsBuilt = false;
 
     int arpModeApplied = -1, arpHoldApplied = -1;
+    uint16_t arpRateApplied = 0xffff;
 
     std::array<std::atomic<float>, 8> voiceLevel {};
 
