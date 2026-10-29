@@ -112,3 +112,16 @@ It caught two real engine truths on the way:
 
 CI run 40810650803: **all 6 jobs green** including the harness on both
 plugin platforms. Next gate: Garth loads it in Live on his Mac.
+
+## Update 2026-10-28 (night) — built + installed on Garth's Mac
+
+Mac build green (Xcode 27, arm64); the harness PASSES on the Mac with
+identical numbers (sustain RMS 0.1183, tail 0). Installed: VST3 +
+Component in ~/Library/Audio/Plug-Ins, Standalone in ~/Applications.
+The JUCE bundles needed a `codesign --force --deep --sign -` re-seal
+before macOS accepted the signatures (documented in plugin/README.md).
+auval run over SSH cannot see user AU components on this system (it
+lists Apple units only, same for the older ElfDrumLXR component) - the
+AU check therefore happens inside Live's own scan in the GUI session.
+Awaiting Garth's ears: load ElfPro800 (VST3) in Live, play it, sweep
+the panel.
