@@ -231,7 +231,10 @@ void ElfPro800Processor::requestPresetDelta (int delta)
 {
     presetRequest.store (juce::jlimit (0, FACTORY_COUNT - 1, presetIndex.load() + delta));
 }
-juce::String ElfPro800Processor::getPresetName() const { return getProgramName (presetIndex.load()); }
+juce::String ElfPro800Processor::getPresetName() const
+{
+    return FACTORY_NAMES[juce::jlimit (0, FACTORY_COUNT - 1, presetIndex.load())];
+}
 
 void ElfPro800Processor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
